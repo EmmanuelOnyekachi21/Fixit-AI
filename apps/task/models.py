@@ -50,7 +50,7 @@ class Task(models.Model):
     ]
 
     repository = models.ForeignKey(
-        'Repository',
+        Repository,
         on_delete=models.CASCADE,
         related_name='tasks'
     )

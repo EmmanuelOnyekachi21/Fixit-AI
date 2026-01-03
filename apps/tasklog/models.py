@@ -5,6 +5,7 @@ This module defines the TaskLog model for tracking detailed logs and events
 associated with security vulnerability remediation tasks.
 """
 from django.db import models
+from apps.task.models import Task
 
 
 class TaskLog(models.Model):
