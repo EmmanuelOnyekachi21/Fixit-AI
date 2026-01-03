@@ -55,7 +55,8 @@ class TaskLog(models.Model):
         return (
             f"{self.task.id} - {self.level.upper()} - {self.action}"
         )
-    
+
+
     class Meta:
         ordering = ['-timestamp']
 
