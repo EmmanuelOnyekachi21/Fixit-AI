@@ -13,6 +13,7 @@ from .serializers import (
     RepositorySerializer,
     RepositoryWriteSerializer
 )
+from apps.core.analyzer_service import AnalyzerService
 
 
 @api_view(['POST'])
@@ -41,14 +42,42 @@ def create_repository(request):
     if serializer.is_valid():
         repository = serializer.save()
 
-        response_serializer = RepositorySerializer(repository).data
+        # Trigger analysis immediately
+        analyzer = AnalyzerService()
+
+        try:
+            tasks = analyzer.analyze_repository(repository.id)
+
+            # Refresh repository to get updated status
+            repository.refresh_from_db()
+
+            # Prepare response with analysis results
+            response_data = RepositorySerializer(repository).data
+            response_data['analysis'] = {
+                'status': 'success',
+                'tasks_created': len(tasks),
+                'message': f'Analysis complete. Found {len(tasks)} security issues.'
+            }
+                    
+        except Exception as e:
+
+            # Analysis failed, but repository exists
+            repository.refresh_from_db()
+            response_data = RepositorySerializer(repository).data
+            response_data['analysis'] = {
+                'status': 'failed',
+                'tasks_created': 0,
+                'message': f'Analysis failed: {str(e)}'
+            }
+            print(f"Analysis failed: {e}")
+
         created = serializer.context.get('created', False)
         status_code = (
             status.HTTP_201_CREATED if created else status.HTTP_200_OK
         )
 
         return Response(
-            response_serializer,
+            response_data,
             status=status_code
         )
 

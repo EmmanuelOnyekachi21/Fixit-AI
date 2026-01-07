@@ -43,6 +43,9 @@ class Repository(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     last_analyzed_at = models.DateTimeField(null=True, blank=True)
 
+    # Example values: "Analyzing 3/10 files", "Completed", "Error", "Paused"
+    analysis_progress = models.CharField(max_length=255, null=True, blank=True)
+
     def __str__(self):
         """
         Return a string representation of the repository.

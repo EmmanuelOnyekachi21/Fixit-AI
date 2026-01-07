@@ -46,6 +46,7 @@ class Task(models.Model):
         ('hardcoded_secret', 'Hardcoded Secret'),
         ('command_injection', 'Command Injection'),
         ('path_traversal', 'Path Traversal'),
+        ('authentication_bypass', 'Authentication Bypass'),
         ('insecure_deserialization', 'Insecure Deserialization'),
     ]
 

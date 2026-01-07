@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'apps.tasklog',
     'apps.api',
     'apps.gemini_analyzer',
+    'apps.github_integration',
 ]
 
 MIDDLEWARE = [
