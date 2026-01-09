@@ -19,9 +19,11 @@ Analyze the following code file and and return ONLY a JSON array of vulnerabilit
   - xss
   - authentication_bypass
   - insecure_crypto
-  - hardcoded_secrets
+  - hardcoded_secret
   - path_traversal
   - command_injection
+  - insecure_deserialization
+  - csrf
 - For each vulnerability found, provide:
   - title: short, clear summary of the vulnerability
   - type: vulnerability type (use snake_case from the list above)

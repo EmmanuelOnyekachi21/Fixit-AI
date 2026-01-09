@@ -18,6 +18,7 @@ class ResponseParser:
         'hardcoded_secret': 'hardcoded_secret',
         'command_injection': 'command_injection',
         'path_traversal': 'path_traversal',
+        'authentication_bypass': 'authentication_bypass',
         'insecure_deserialization': 'insecure_deserialization',
     }
 

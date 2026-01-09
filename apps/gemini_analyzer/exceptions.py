@@ -13,6 +13,16 @@ class GeminiAPIError(GeminiAnalyzerError):
     pass
 
 
+class GeminiRateLimitError(GeminiAPIError):
+    """Raised when Gemini API rate limit is exceeded."""
+    pass
+
+
+class GeminiNetworkError(GeminiAPIError):
+    """Raised when network connection to Gemini fails."""
+    pass
+
+
 class ResponseParsingError(GeminiAnalyzerError):
     """Raised when response parsing fails."""
     pass

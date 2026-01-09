@@ -4,14 +4,21 @@ Core analyzer service module.
 This module orchestrates the complete repository analysis workflow,
 coordinating between GitHub integration and Gemini analysis services.
 """
+import logging
 from typing import List
 
 from django.utils import timezone
 
 from apps.gemini_analyzer.services.code_analyzer import CodeAnalyzer
+from apps.gemini_analyzer.exceptions import (
+    GeminiRateLimitError,
+    GeminiNetworkError
+)
 from apps.github_integration.services.github_client import GitHubClient
 from apps.repository.models import Repository
 from apps.task.models import Task
+
+logger = logging.getLogger(__name__)
 
 
 class AnalyzerService:
@@ -119,8 +126,43 @@ class AnalyzerService:
                         )
                     else:
                         print("    ✓ No vulnerabilities found")
+
+                except GeminiRateLimitError as e:
+                    # Rate limit hit - stop processing and save progress
+                    logger.error(
+                        f"Rate limit exceeded at file {index}/{total_files}. "
+                        f"Stopping analysis. Error: {e}"
+                    )
+                    print(
+                        f"\n⚠ Rate limit exceeded. "
+                        f"Analyzed {index-1}/{total_files} files. "
+                        f"Please try again later."
+                    )
+                    repository.status = 'error'
+                    repository.analysis_progress = (
+                        f"Rate limit exceeded at {index-1}/{total_files} files"
+                    )
+                    repository.save()
+                    # Return tasks created so far
+                    return all_tasks
+
+                except GeminiNetworkError as e:
+                    # Network error - log and continue with next file
+                    logger.warning(
+                        f"Network error analyzing {filepath}: {e}. "
+                        f"Skipping file and continuing."
+                    )
+                    print(
+                        f"    ⚠ Network error, skipping file: {filepath}"
+                    )
+                    continue
+
                 except Exception as e:
-                    print(f"Error analyzing file {filepath}: {e}")
+                    # Other errors - log and continue
+                    logger.exception(
+                        f"Error analyzing file {filepath}: {e}"
+                    )
+                    print(f"    ✗ Error analyzing file: {e}")
                     continue
 
             # Update repository status
