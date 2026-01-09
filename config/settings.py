@@ -47,7 +47,7 @@ INSTALLED_APPS = [
     'apps.repository',
     'apps.task',
     'apps.tasklog',
-    'apps.api',
+    # 'apps.api',
     'apps.gemini_analyzer',
     'apps.github_integration',
 ]
