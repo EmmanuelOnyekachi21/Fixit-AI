@@ -97,16 +97,19 @@ class GeminiClient:
 
             except google_exceptions.ResourceExhausted as e:
                 # Rate limit exceeded
-                print(f"Rate limit exceeded (attempt {attempt + 1}/{self.max_retries}): {e}")
-                
+                print(
+                    f"Rate limit exceeded "
+                    f"(attempt {attempt + 1}/{self.max_retries}): {e}"
+                )
+
                 if attempt < self.max_retries - 1:
                     print(f"Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
                     retry_delay = min(retry_delay * 2, self.max_retry_delay)
                 else:
                     raise GeminiRateLimitError(
-                        f"Rate limit exceeded after {self.max_retries} attempts. "
-                        "Please wait before making more requests."
+                        f"Rate limit exceeded after {self.max_retries} "
+                        f"attempts. Please wait before making more requests."
                     ) from e
 
             except (
@@ -116,15 +119,19 @@ class GeminiClient:
                 TimeoutError
             ) as e:
                 # Network/connectivity errors
-                print(f"Network error (attempt {attempt + 1}/{self.max_retries}): {e}")
-                
+                print(
+                    f"Network error "
+                    f"(attempt {attempt + 1}/{self.max_retries}): {e}"
+                )
+
                 if attempt < self.max_retries - 1:
                     print(f"Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
                     retry_delay = min(retry_delay * 2, self.max_retry_delay)
                 else:
                     raise GeminiNetworkError(
-                        f"Network error after {self.max_retries} attempts: {str(e)}"
+                        f"Network error after {self.max_retries} "
+                        f"attempts: {str(e)}"
                     ) from e
 
             except google_exceptions.GoogleAPIError as e:

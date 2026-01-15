@@ -1,3 +1,9 @@
+"""
+Import-based file analysis module.
+
+This module analyzes file imports and patterns to assess security risks
+and dependencies.
+"""
 import re
 
 
@@ -42,38 +48,41 @@ class ImportAnalyzer:
     def score_file(self, content: str, file_path: str) -> int:
         """
         Calculate risk score for a file.
-        
+
         Args:
-            content: File content as string
-            filepath: File path for context
-            
+            content: File content as string.
+            file_path: File path for context.
+
         Returns:
-            Risk score (0-100)
+            int: Risk score (0-100).
         """
         import_score = self._score_imports(content)
         pattern_score = self._score_patterns(content)
         total_score = import_score + pattern_score
         total_score = min(total_score, 100)
         return total_score
-    
+
     def _score_imports(self, content: str) -> int:
         """
         Calculate risk score based on imports.
 
         Args:
-            content: File content as string
+            content: File content as string.
 
         Returns:
-            Risk score (0-100)
+            int: Risk score (0-100).
         """
         score = 0
 
         # Check each risky import against the content
-        for import_name, risk in ImportAnalyzer.RISKY_IMPORTS.items():
+        for import_name, risk in self.RISKY_IMPORTS.items():
             # Match both "import X" and "from X import"
             # Using word boundaries to avoid partial matches
-            
-            import_pattern = rf'\b(import\s+{re.escape(import_name)}|from\s+{re.escape(import_name)})'
+
+            import_pattern = (
+                rf'\b(import\s+{re.escape(import_name)}|'
+                rf'from\s+{re.escape(import_name)})'
+            )
             if re.search(import_pattern, content):
                 score += risk
         # Normalize the score to a 0-100 scale
@@ -85,13 +94,13 @@ class ImportAnalyzer:
         Calculate risk score based on patterns.
 
         Args:
-            content: File content as string
+            content: File content as string.
 
         Returns:
-            Risk score (0-100)
+            int: Risk score (0-100).
         """
         pattern_score = 0
-        for patterns, score in ImportAnalyzer.DANGEROUS_PATTERNS.items():
+        for patterns, score in self.DANGEROUS_PATTERNS.items():
             if re.search(patterns, content):
                 pattern_score += score
         return pattern_score

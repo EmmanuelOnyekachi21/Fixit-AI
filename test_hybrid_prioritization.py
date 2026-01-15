@@ -1,4 +1,11 @@
+"""
+Test script for hybrid file prioritization.
+
+This script tests the GitHub client's hybrid prioritization system
+by fetching and prioritizing files from a real repository.
+"""
 import os
+
 import django
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')

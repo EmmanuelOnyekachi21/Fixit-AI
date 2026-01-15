@@ -36,7 +36,7 @@ class AiAnalyzer:
             files: List of dicts with 'path' and 'content' keys
             repo_name: Repository name
             max_files: Number of files to suggest
-            
+
         Returns:
             List of filepaths in priority order
         """

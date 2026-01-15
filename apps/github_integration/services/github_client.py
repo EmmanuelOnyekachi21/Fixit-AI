@@ -26,10 +26,11 @@ class GitHubClient:
     - Smart prioritization to stay within API limits
     """
     MAX_FILES = 25
-    CANDIDATE_MULTIPLIER = 2  # Fetch 50 candidates (stays within 60 req/hour limit)
+    # Fetch 50 candidates (stays within 60 req/hour limit)
+    CANDIDATE_MULTIPLIER = 2
 
     def __init__(self):
-        """Initialize the GitHub client with API endpoints and analyzers."""
+        """Initialize the GitHub client with API endpoints."""
         self.base_url = "https://api.github.com"
         self.raw_base = "https://raw.githubusercontent.com"
         self.session = requests.Session()
@@ -76,34 +77,54 @@ class GitHubClient:
         # Step 4: Early exit if small repo
         if len(python_files) <= self.MAX_FILES:
             print(f"Small repo - fetching all {len(python_files)} files")
-            files_with_content = self._fetch_all_files(python_files, owner, repo, branch)
+            files_with_content = self._fetch_all_files(
+                python_files,
+                owner,
+                repo,
+                branch
+            )
             print(f"✓ Fetched {len(files_with_content)} files\n")
             return files_with_content
 
         # Step 5: Large repo - use two-stage prioritization
-        print(f"Large repo - using smart prioritization...")
-        
+        print("Large repo - using smart prioritization...")
+
         # Stage 1: Heuristic pre-filtering (no content needed)
         candidate_count = min(
             len(python_files),
             self.MAX_FILES * self.CANDIDATE_MULTIPLIER
         )
-        candidates = self._heuristic_prefilter(python_files, candidate_count)
-        print(f"  Stage 1: Selected {len(candidates)} candidates via heuristic")
-        
+        candidates = self._heuristic_prefilter(
+            python_files,
+            candidate_count
+        )
+        print(
+            f"  Stage 1: Selected {len(candidates)} candidates "
+            f"via heuristic"
+        )
+
         # Stage 2: Fetch content for candidates only
-        print(f"  Stage 2: Fetching content for {len(candidates)} candidates...")
+        print(
+            f"  Stage 2: Fetching content for "
+            f"{len(candidates)} candidates..."
+        )
         candidates_with_content = self._fetch_all_files(
             candidates,
             owner,
             repo,
             branch
         )
-        print(f"  Successfully fetched {len(candidates_with_content)} files")
-        
+        print(
+            f"  Successfully fetched "
+            f"{len(candidates_with_content)} files"
+        )
+
         # Stage 3: Full prioritization with AI + import analysis
         if len(candidates_with_content) > self.MAX_FILES:
-            print(f"  Stage 3: Final prioritization to top {self.MAX_FILES}...")
+            print(
+                f"  Stage 3: Final prioritization to "
+                f"top {self.MAX_FILES}..."
+            )
             final_files = self.prioritizer.prioritize_files(
                 candidates_with_content,
                 repo_name,
@@ -112,7 +133,10 @@ class GitHubClient:
             print(f"✓ Selected {len(final_files)} priority files\n")
             return final_files
         else:
-            print(f"✓ Returning all {len(candidates_with_content)} candidates\n")
+            print(
+                f"✓ Returning all {len(candidates_with_content)} "
+                f"candidates\n"
+            )
             return candidates_with_content
 
     def _heuristic_prefilter(
