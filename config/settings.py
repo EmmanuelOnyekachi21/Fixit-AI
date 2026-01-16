@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     # 'apps.api',
     'apps.gemini_analyzer',
     'apps.github_integration',
+    'apps.verification',
 ]
 
 MIDDLEWARE = [

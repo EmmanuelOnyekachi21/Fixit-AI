@@ -54,6 +54,89 @@ class GeminiClient:
         self.last_response = None
         self.last_vulnerabilities = None
 
+    def generate_content_with_retry(self, prompt: str) -> str:
+        """
+        Generate content using Gemini API with retry logic.
+        
+        This is a shared method that handles retries for rate limits,
+        network errors, and service unavailability (503 errors).
+        
+        Args:
+            prompt: The prompt to send to Gemini.
+        
+        Returns:
+            str: The response text from Gemini.
+        
+        Raises:
+            GeminiRateLimitError: If rate limit is exceeded after retries.
+            GeminiNetworkError: If network connection fails after retries.
+            GeminiAPIError: For other API errors.
+        """
+        retry_delay = self.initial_retry_delay
+
+        for attempt in range(self.max_retries):
+            try:
+                # Send prompt to Gemini
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=[prompt]
+                )
+                
+                # Success!
+                return response.text
+
+            except google_exceptions.ResourceExhausted as e:
+                # Rate limit exceeded
+                print(
+                    f"Rate limit exceeded "
+                    f"(attempt {attempt + 1}/{self.max_retries}): {e}"
+                )
+
+                if attempt < self.max_retries - 1:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, self.max_retry_delay)
+                else:
+                    raise GeminiRateLimitError(
+                        f"Rate limit exceeded after {self.max_retries} "
+                        f"attempts. Please wait before making more requests."
+                    ) from e
+
+            except (
+                google_exceptions.ServiceUnavailable,
+                google_exceptions.DeadlineExceeded,
+                ConnectionError,
+                TimeoutError
+            ) as e:
+                # Network/connectivity errors (includes 503)
+                print(
+                    f"Service unavailable or network error "
+                    f"(attempt {attempt + 1}/{self.max_retries}): {e}"
+                )
+
+                if attempt < self.max_retries - 1:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, self.max_retry_delay)
+                else:
+                    raise GeminiNetworkError(
+                        f"Service unavailable after {self.max_retries} "
+                        f"attempts: {str(e)}"
+                    ) from e
+
+            except google_exceptions.GoogleAPIError as e:
+                # Other Google API errors (don't retry)
+                print(f"Gemini API error: {e}")
+                raise GeminiAPIError(f"Gemini API error: {str(e)}") from e
+
+            except Exception as e:
+                # Unexpected errors
+                print(f"Unexpected error during Gemini API call: {e}")
+                raise GeminiAPIError(f"Unexpected error: {str(e)}") from e
+
+        # Should not reach here, but just in case
+        raise GeminiAPIError("Failed to generate content after all retries")
+
     def analyze_code(self, code_content: str, filename: str) -> List[Dict]:
         """
         Analyze code for security vulnerabilities using Gemini API.

@@ -23,12 +23,16 @@ class TaskAdmin(admin.ModelAdmin):
         'repository',
         'vulnerability_type',
         'colored_status',
+        'colored_test_status',
+        'colored_fix_status',
         'file_path',
         'retry_count',
         'created_at',
     )
     list_filter = (
         'status',
+        'test_status',
+        'fix_status',
         'vulnerability_type',
         'repository',
     )
@@ -38,7 +42,7 @@ class TaskAdmin(admin.ModelAdmin):
         'file_path',
     )
     ordering = ('-created_at',)
-    readonly_fields = ('created_at', 'started_at', 'completed_at')
+    readonly_fields = ('created_at', 'started_at', 'completed_at', 'verified_at')
 
     def colored_status(self, obj):
         """
@@ -66,4 +70,54 @@ class TaskAdmin(admin.ModelAdmin):
             obj.status.upper()
         )
     colored_status.short_description = 'Status'
+
+    def colored_test_status(self, obj):
+        """
+        Display the test status with color coding.
+        
+        Args:
+            obj (Task): The task instance.
+            
+        Returns:
+            str: HTML formatted string with colored test status text.
+        """
+        colors = {
+            'pending': 'gray',
+            'generated': 'blue',
+            'failed': 'orange',  # Test failed means vulnerability exists
+            'passed': 'green',   # Test passed means vulnerability fixed
+            'error': 'red'
+        }
+
+        return format_html(
+            '<span style="color: {};">{}</span>',
+            colors.get(obj.test_status, 'black'),
+            obj.test_status.upper()
+        )
+    colored_test_status.short_description = 'Test Status'
+
+    def colored_fix_status(self, obj):
+        """
+        Display the fix status with color coding.
+        
+        Args:
+            obj (Task): The task instance.
+            
+        Returns:
+            str: HTML formatted string with colored fix status text.
+        """
+        colors = {
+            'pending': 'gray',
+            'generated': 'blue',
+            'applied': 'orange',
+            'verified': 'green',
+            'failed': 'red'
+        }
+
+        return format_html(
+            '<span style="color: {};">{}</span>',
+            colors.get(obj.fix_status, 'black'),
+            obj.fix_status.upper()
+        )
+    colored_fix_status.short_description = 'Fix Status'
 

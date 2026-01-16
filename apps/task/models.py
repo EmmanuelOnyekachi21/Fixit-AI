@@ -75,11 +75,56 @@ class Task(models.Model):
         choices=STATUS_CHOICES,
         default='pending'
     )
-    retry_count = models.IntegerField(default=0)
     applied_fix = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+
+    # New fields
+    test_code = models.TextField(
+        blank=True,
+        help_text='Generated test that proves vulnerability exists'
+    )
+    test_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('generated', 'Test Generated'),
+            ('failed', 'Test Failed'),  # Proves vulnerability exists
+            ('passed', 'Test Passed'),  # Vulnerability fixed
+            ('error', 'Test Error'),
+        ],
+        default='pending'
+    )
+
+    fix_code = models.TextField(
+        blank=True,
+        help_text='Generated fix code for the vulnerability'
+    )
+    fix_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('generated', 'Fix Generated'),
+            ('applied', 'Fix Applied'),
+            ('verified', 'Fix Verified'),
+            ('failed', 'Fix Failed'),
+        ],
+        default='pending'
+    )
+    retry_count = models.IntegerField(
+        default=0,
+        help_text='Number of times the fix has been retried'
+    )
+    validation_message = models.TextField(
+        blank=True,
+        help_text="Details from test/fix validation"
+    )
+    verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the fix was verified"
+    )
 
     def __str__(self):
         """
