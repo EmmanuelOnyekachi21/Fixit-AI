@@ -37,6 +37,7 @@ class Task(models.Model):
         ('failed', 'Failed'),
         ('abandoned', 'Abandoned'),
         ('false_positive', 'False Positive'),
+        ('pr_created', 'PR Created')
     ]
 
     VULNERABILITY_TYPES = [
@@ -124,6 +125,12 @@ class Task(models.Model):
         null=True,
         blank=True,
         help_text="Timestamp when the fix was verified"
+    )
+    
+    # Store original file content for fix generation
+    original_code = models.TextField(
+        blank=True,
+        help_text="Original vulnerable code from the file"
     )
 
     def __str__(self):

@@ -52,8 +52,22 @@ class FixGenerator:
         Returns:
             str: Prompt string.
         """
+        # Use stored original code
+        original_code = task.original_code
+        
+        if not original_code:
+            print(f"Warning: No original code stored for task {task.id}")
+            original_code = "# Original code not available"
+        
         prompt = f"""
-You are a security expert. Fix the following vulnerability so that the test passes.
+You are a security expert. Fix the following vulnerability in the code.
+
+**CRITICAL REQUIREMENTS:**
+1. Return the COMPLETE fixed file with ALL original code
+2. Only modify the vulnerable lines - keep everything else unchanged
+3. Maintain all imports, functions, and logic
+4. Return ONLY executable Python code, no explanations or markdown
+5. Do NOT return empty code or just comments
 
 **Vulnerability Details:**
 - Type: {task.vulnerability_type}
@@ -61,27 +75,24 @@ You are a security expert. Fix the following vulnerability so that the test pass
 - Line: {task.line_number}
 - Description: {task.description}
 
+**ORIGINAL FILE CONTENT:**
+```python
+{original_code}
+```
+
 **Test That Must Pass:**
 ```python
 {task.test_code}
 ```
 
-**Requirements:**
-1. Generate ONLY the fixed code that resolves the vulnerability
-2. The fix must make the test above pass
-3. Maintain the original functionality while fixing the security issue
-4. Include necessary imports if needed
-5. Return ONLY executable Python code, no explanations
+**Your task:**
+Generate the COMPLETE fixed version of the file above that:
+- Fixes the {task.vulnerability_type} vulnerability at line {task.line_number}
+- Makes the test pass
+- Preserves ALL other code exactly as-is
+- Uses secure coding practices (parameterized queries, input validation, etc.)
 
-**Example format:**
-```python
-# Fixed code here
-def secure_function():
-    # Implementation that fixes the vulnerability
-    pass
-```
-
-Generate the fix now:
+Return the COMPLETE fixed file now:
 """
         return prompt
 

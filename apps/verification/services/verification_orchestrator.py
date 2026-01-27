@@ -13,6 +13,11 @@ from .fix_generator import FixGenerator
 from .test_generator import TestGenerator
 from .test_runner import TestRunner
 
+from apps.github_integration.services.github_auth_service import GithubAuthService
+from apps.github_integration.services.branch_manager import BranchManager
+from apps.github_integration.services.commit_service import CommitService
+from apps.github_integration.services.pr_creator import PRCreator
+
 
 class VerificationOrchestrator:
     """
@@ -29,8 +34,9 @@ class VerificationOrchestrator:
         self.test_generator = TestGenerator()
         self.fix_generator = FixGenerator()
         self.test_runner = TestRunner()
+        self.github_client = GithubAuthService()
     
-    def verify_and_fix_vulnerability(self, task: Task) -> bool:
+    def verify_and_fix_vulnerability(self, task: Task, create_pr: bool = False) -> bool:
         """
         Complete verify-first workflow for one task.
         
@@ -67,6 +73,17 @@ class VerificationOrchestrator:
         task.verified_at = timezone.now()
         task.save()
         self._log(task, "Verification workflow completed successfully")
+
+        # Create PR if requested
+        if create_pr:
+            try:
+                self._create_github_pr(task)
+            except Exception as e:
+                self._log(
+                    task,
+                    f"Failed to create PR: {e}",
+                    level='error'
+                )
         
         return True
     
@@ -241,6 +258,7 @@ class VerificationOrchestrator:
             task.save()
             
             self._log(task, "Fix generated successfully")
+            print(fix_code)
             return True
             
         except Exception as e:
@@ -265,11 +283,11 @@ class VerificationOrchestrator:
         self._log(task, "Verifying fix by running test again...")
         
         try:
-            # For Week 2: We simulate applying the fix by just running the test
-            # Week 3 will actually modify files
-            result = self.test_runner.run_test(
+            # Apply the fix temporarily to verify it works
+            result = self.test_runner.run_test_with_fix(
                 test_code=task.test_code,
-                file_path=task.file_path
+                file_path=task.file_path,
+                fix_code=task.fix_code
             )
             
             if result.passed:
@@ -320,3 +338,74 @@ class VerificationOrchestrator:
             message=f"[{level}] {message}"
         )
         print(f"Task {task.id} - {message}")
+    
+    def _create_github_pr(self, task):
+        """
+        Create Github PR for verified fix.
+
+        Args:
+            task (Task): Task with verified fix.
+        """
+        self._log(
+            task,
+            "Creating Github pull request..."
+        )
+
+        # Get authenticated Github client
+        github_client = self.github_client.get_authenticated_client()
+
+        # Create branch
+        branch_manager = BranchManager(github_client)
+        branch_name = branch_manager.create_fix_branch(
+            task.repository.owner,
+            task.repository.repo_name,
+            task.id,
+            task.vulnerability_type
+        )
+        self._log(
+            task,
+            f"Created branch: {branch_name}"
+        )
+
+        # Generate test file path
+        test_path = (
+            f"tests/test_{task.file_path.replace('/', '_')}"
+        )
+
+        # Commit fix and test to branch
+        commit_service = CommitService(github_client)
+        commit_sha = commit_service.commit_fix(
+            task.repository.owner,
+            task.repository.repo_name,
+            branch_name,
+            task.file_path,
+            task.fix_code,
+            test_path,
+            task.test_code,
+            commit_message=commit_service.generate_commit_message(task)
+        )
+
+        self._log(
+            task,
+            f"Committed fix to branch (SHA: {commit_sha[:7]})"
+        )
+
+        # Create pull request
+        pr_creator = PRCreator(github_client)
+        pr = pr_creator.create_pull_request(
+            task=task,
+            branch_name=branch_name,
+            owner=task.repository.owner,
+            repo_name=task.repository.repo_name
+        )
+
+
+        # Update task status
+        task.status = 'pr_created'
+        task.save()
+
+        self._log(
+            task,
+            f"Pull request created: {pr.pr_url}"
+        )
+        

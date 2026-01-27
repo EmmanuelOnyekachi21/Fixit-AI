@@ -14,6 +14,7 @@ from .serializers import (
     RepositoryWriteSerializer
 )
 from apps.core.analyzer_service import AnalyzerService
+from django.shortcuts import get_object_or_404
 
 
 @api_view(['POST'])
@@ -85,3 +86,40 @@ def create_repository(request):
         serializer.errors,
         status=status.HTTP_400_BAD_REQUEST
     )
+
+@api_view(['GET'])
+def list_repository_tasks(request, repository_id):
+    """
+    List all tasks for a repository.
+    """
+
+    try:
+        repository = Repository.objects.get(id=repository_id)
+    except Repository.DoesNotExist:
+        return Response({
+            'error': 'Repository not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    tasks = Task.objects.filter(
+        repository=repository
+    )
+
+    task_data = [
+        {
+            'id': task.id,
+            'title': task.title,
+            'vulnerability_type': task.vulnerability_type,
+            'file_path': task.file_path,
+            'line_number': task.line_number,
+            'status': task.status,
+            'test_status': task.test_status,
+            'fix_status': task.fix_status,
+            'has_pr': task.pull_requests.exists()
+        } for task in tasks
+    ]
+
+    return Response({
+        'repository_id': repository_id,
+        'total_task': len(task_data),
+        'tasks': task_data
+    })

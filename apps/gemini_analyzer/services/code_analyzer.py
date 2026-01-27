@@ -86,7 +86,8 @@ class CodeAnalyzer:
             # Step 3: Create tasks
             tasks = self.parser.create_and_save_tasks(
                 validated_vulns,
-                repository
+                repository,
+                file_content  # Pass original code
             )
 
             logger.info(
@@ -113,18 +114,18 @@ class CodeAnalyzer:
             logger.error(
                 f"Failed to parse response for {file_path}: {e}"
             )
-            return []
+            raise
 
         except GeminiAPIError as e:
             # Other API errors - log and continue
             logger.error(
                 f"Gemini API error while analyzing {file_path}: {e}"
             )
-            return []
+            raise
 
         except Exception as e:
             # Unexpected errors - log and continue
             logger.exception(
                 f"Unexpected error while analyzing {file_path}: {e}"
             )
-            return []
+            raise

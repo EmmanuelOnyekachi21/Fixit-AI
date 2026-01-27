@@ -43,6 +43,8 @@ class TestGenerator:
 
         except Exception as e:
             print(f"Error generating test for task {task.id}: {e}")
+            import traceback
+            traceback.print_exc()
             return ""
 
     def _build_test_prompt(self, task: Task) -> str:
@@ -55,6 +57,9 @@ class TestGenerator:
         Returns:
             str: Prompt string.
         """
+        # Extract just the filename for import purposes
+        filename = task.file_path.split('/')[-1].replace('.py', '')
+        
         prompt = f"""
 You are a security testing expert. Generate a pytest test that proves the following vulnerability exists.
 
@@ -64,21 +69,28 @@ You are a security testing expert. Generate a pytest test that proves the follow
 - Line: {task.line_number}
 - Description: {task.description}
 
-**Requirements:**
-1. Write a pytest test function that will FAIL if the vulnerability exists
-2. The test should demonstrate how to exploit the vulnerability
-3. Include necessary imports
-4. Use clear assertion messages
-5. Return ONLY executable Python code, no explanations
+**ORIGINAL CODE TO TEST:**
+```python
+{task.original_code}
+
+**CRITICAL REQUIREMENTS:**
+1. The vulnerable code will be in a file named '{filename}.py' in the SAME directory as your test
+2. Import from it like: `from {filename} import function_name`
+3. Write a pytest test function that will FAIL if the vulnerability exists
+4. The test should demonstrate how to exploit the vulnerability
+5. Include necessary imports
+6. Use clear assertion messages that explain the vulnerability
+7. Return ONLY executable Python code, no explanations or markdown
 
 **Example format:**
 ```python
 import pytest
+from {filename} import vulnerable_function
 
 def test_vulnerability_name():
     # Test code that exploits the vulnerability
     # This should FAIL, proving the bug exists
-    assert condition_that_should_be_true
+    assert condition_that_should_be_true, "Vulnerability explanation"
 ```
 
 Generate the test now.

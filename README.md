@@ -45,8 +45,15 @@ Fixit follows a strict **"Show, Don't Just Tell"** policy:
 If a generated fix fails the validation tests or breaks the build:
 1. Fixit **analyzes** the error logs.
 2. **Adjusts** its strategy.
-3. **Tries again**.  
+3. **Tries again** (up to 1 retry).  
 *This mimics the iterative workflow of a human Senior Engineer.*
+
+### 4. In-Memory Testing
+Fixit uses an innovative approach to test fixes without cloning repositories:
+- Original code is stored during analysis
+- Tests run in isolated temporary directories
+- No disk space wasted on cloned repos
+- Faster execution and better security
 
 ---
 
@@ -56,7 +63,7 @@ If a generated fix fails the validation tests or breaks the build:
 graph TD
     A[🧠 Brain: Gemini 3 API] -->|Reasoning| B(Orchestrator: Django);
     B -->|State & Queue| C[(PostgreSQL)];
-    B -->|Executes Code| D[📦 Sandbox: Docker];
+    B -->|Executes Code| D[📦 Isolated Testing];
     B -->|Creates PRs| E[Action Layer: GitHub];
     D -->|Test Results| B;
     E -->|Updates| F[User Repo];
@@ -64,17 +71,31 @@ graph TD
 
 - **Brain**: Powered by **Gemini 3 API** for deep reasoning and long-context codebase analysis.
 - **Orchestrator (Django)**: Manages the state machine, task queuing, and persistent memory.
-- **Sandbox**: An isolated environment where Fixit safely executes and tests code.
+- **Isolated Testing**: In-memory temporary environments where Fixit safely executes and tests code.
 - **Action Layer**: GitHub Integration for automated Pull Request (PR) creation.
+
+### 🔑 Key Implementation Details
+
+**In-Memory Testing (No Cloning Required)**
+- Original code is stored in the database during analysis
+- Tests run in isolated temporary directories
+- Fixed code and test code are written to temp files
+- Tests execute in isolation, then cleanup automatically
+- No need to clone entire repositories to disk
+
+**AI Coordination**
+- Test generator sees original code to write accurate imports
+- Fix generator sees the same code to create proper fixes
+- Both coordinate through shared context for consistency
 
 ---
 
 ## 📅 Development Roadmap
 
-- [ ] **Week 1: Foundation** - Persistent State Machine & Repo Ingestion.
-- [ ] **Week 2: The Auditor** - Deep scanning and Vulnerability Identification.
-- [ ] **Week 3: The Prover** - Automated Unit Test generation for proof-of-concept.
-- [ ] **Week 4: The Fixer** - Self-correcting patches and validation loops.
+- [x] **Week 1: Foundation** - Persistent State Machine & Repo Ingestion.
+- [x] **Week 2: The Auditor** - Deep scanning and Vulnerability Identification.
+- [x] **Week 3: The Prover** - Automated Unit Test generation for proof-of-concept.
+- [x] **Week 4: The Fixer** - Self-correcting patches and validation loops.
 - [ ] **Week 5: The Marathon** - 6-hour autonomous stress tests on large-scale repositories.
 
 ---
@@ -83,11 +104,83 @@ graph TD
 
 | Component | Technology |
 | :--- | :--- |
-| **Language** | Python |
-| **Framework** | Django (REST Framework) |
+| **Language** | Python 3.10+ |
+| **Framework** | Django 5.0 (REST Framework) |
 | **AI Model** | Gemini 3 API |
 | **Database** | PostgreSQL |
-| **Environment** | Docker (Sandbox Execution) |
+| **Testing** | pytest (Isolated Environments) |
+| **Version Control** | GitHub API Integration |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Python 3.10+
+- PostgreSQL
+- Git
+- Gemini API Key
+- GitHub Bot Token
+
+### Installation
+
+1. **Clone the repository**
+```bash
+git clone https://github.com/yourusername/fixit.git
+cd fixit
+```
+
+2. **Set up virtual environment**
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
+
+3. **Install dependencies**
+```bash
+pip install -r requirements.txt
+```
+
+4. **Configure environment variables**
+Create a `.env` file in the project root:
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+GITHUB_BOT_TOKEN=your_github_token_here
+```
+
+5. **Set up database**
+```bash
+python manage.py migrate
+```
+
+6. **Create superuser**
+```bash
+python manage.py createsuperuser
+```
+
+7. **Run the server**
+```bash
+python manage.py runserver
+```
+
+### Usage
+
+1. **Add a repository**
+```bash
+curl -X POST http://localhost:8000/api/create/repository/ \
+-H "Content-Type: application/json" \
+-d '{"repo_url": "https://github.com/username/repo"}'
+```
+
+2. **Verify and fix vulnerabilities**
+```bash
+curl -X POST http://localhost:8000/api/tasks/{task_id}/verify-and-fix/ \
+-H "Content-Type: application/json" \
+-d '{"create_pr": true}'
+```
+
+3. **Monitor progress**
+Visit `http://localhost:8000/admin` to view tasks, logs, and PRs.
 
 ---
 

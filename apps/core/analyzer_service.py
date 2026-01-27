@@ -12,7 +12,9 @@ from django.utils import timezone
 from apps.gemini_analyzer.services.code_analyzer import CodeAnalyzer
 from apps.gemini_analyzer.exceptions import (
     GeminiRateLimitError,
-    GeminiNetworkError
+    GeminiNetworkError,
+    GeminiAPIError,
+    ResponseParsingError
 )
 from apps.github_integration.services.github_client import GitHubClient
 from apps.repository.models import Repository
@@ -154,6 +156,18 @@ class AnalyzerService:
                     )
                     print(
                         f"    ⚠ Network error, skipping file: {filepath}"
+                    )
+                    continue
+
+                except GeminiAPIError as e:
+                    print(
+                        f"  ⚠️  Skipped {filepath} (API error)"
+                    )
+                    continue
+
+                except ResponseParsingError as e:
+                    print(
+                        f"  ⚠️  Skipped {filepath} (parsing error)"
                     )
                     continue
 

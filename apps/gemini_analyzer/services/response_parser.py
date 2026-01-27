@@ -73,7 +73,8 @@ class ResponseParser:
     def create_tasks(
         self,
         vulnerabilities: List[Dict],
-        repository: Repository
+        repository: Repository,
+        original_code: str = ""
     ) -> List[Task]:
         """
         Create Task objects from validated vulnerabilities.
@@ -81,6 +82,7 @@ class ResponseParser:
         Args:
             vulnerabilities: List of validated vulnerability dicts
             repository: Repository instance to associate tasks with
+            original_code: Original file content
 
         Returns:
             List of created (but not saved) Task objects
@@ -96,6 +98,7 @@ class ResponseParser:
                 file_path=vuln['file_path'],
                 line_number=vuln['line_number'],
                 status='pending',
+                original_code=original_code,  # Store original code
             )
             tasks.append(task)
 
@@ -104,7 +107,8 @@ class ResponseParser:
     def create_and_save_tasks(
         self,
         vulnerabilities: List[Dict],
-        repository: Repository
+        repository: Repository,
+        original_code: str = ""
     ) -> List[Task]:
         """
         Create and save Task objects in bulk.
@@ -112,11 +116,12 @@ class ResponseParser:
         Args:
             vulnerabilities: List of validated vulnerability dicts
             repository: Repository instance to associate tasks with
+            original_code: Original file content
 
         Returns:
             List of saved Task objects
         """
-        tasks = self.create_tasks(vulnerabilities, repository)
+        tasks = self.create_tasks(vulnerabilities, repository, original_code)
 
         if tasks:
             Task.objects.bulk_create(tasks)
