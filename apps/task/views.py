@@ -7,6 +7,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from apps.task.models import Task
+from apps.verification.services.verification_orchestrator import VerificationOrchestrator
 
 
 @api_view(['GET'])
@@ -76,4 +77,56 @@ def get_task_status(request, task_id):
         response_data['error'] = str(task.info)
 
     return Response(response_data)
+
+
+@api_view(['POST'])
+def verify_and_fix(request, task_id):
+    """
+    Verify vulnerability and attempt to fix it.
+
+    Request body:
+        {
+            "create_pr": true
+        }
+    
+    Returns:
+        {
+            "success": true,
+            "task_id": 1,
+            "status": "completed",
+            "test_status": "passed",
+            "fix_status": "verified",
+            "message": "Verification completed"
+        }
+    """
+    create_pr = request.data.get('create_pr', False)
+
+    if isinstance(create_pr, str):
+        create_pr = create_pr.lower() == 'true'
+
+    try:
+        task = Task.objects.get(id=task_id)
+    except Task.DoesNotExist:
+        return Response(
+            {'error': 'Task not found'},
+            status=404
+        )
+    
+    orchestrator = VerificationOrchestrator()
+    success = orchestrator.verify_and_fix_vulnerability(
+        task,
+        create_pr=create_pr
+    )
+
+    return Response(
+        {
+            'success': success,
+            'task_id': task.id,
+            'status': task.status,
+            'test_status': task.test_status,
+            'fix_status': task.fix_status,
+            'message': "Verification completed" if success else "Verification failed"
+        },
+        status=200
+    )
 
