@@ -7,5 +7,5 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('repository/', views.create_repository, name="create-repo")
+    path('create-repository/', views.create_repository, name="create-repo"),
 ]

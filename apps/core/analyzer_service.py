@@ -55,7 +55,6 @@ class AnalyzerService:
         """
         try:
             repository = Repository.objects.get(id=repository_id)
-
             # Validate repository is in correct state
             if repository.status == 'analyzing':
                 print(
@@ -202,5 +201,124 @@ class AnalyzerService:
             raise
 
 
+    def analyze_with_checkpoints(
+        self,
+        repository,
+        session,
+        checkpoint_interval: int = 5
+    ) -> dict:
+        """
+        Analyze repository with periodic checkpoint saving for crash recovery.
+
+        Args:
+            repository: Repository instance to analyze
+            session: AnalysisSession for tracking
+            checkpoint_interval: Save checkpoint every N files.
+        
+        Returns:
+            dict with analysis results.
+        """
+        from apps.analysis_session.models import CheckPoint
+        from django.utils import timezone
+
+        # Check for existing checkpoint to resume frim
+        last_checkpoint = session.checkpoints.first()
+        if last_checkpoint:
+            print(f"Resuming from checkpoint #{last_checkpoint.checkpoint_number}")
+            processed_files = last_checkpoint.files_processed
+            start_index = last_checkpoint.last_file_index + 1
+            checkpoint_counter = last_checkpoint.checkpoint_number
+        else:
+            processed_files = []
+            start_index = 0
+            checkpoint_counter = 0
+        
+        # Fetch files from Github
+        files = self.github_service.get_repo_files(
+            repository.owner,
+            repository.repo_name
+        )
+
+        # Update session with total files
+        session.total_files = len(files)
+        session.save()
+
+        print(f"Total files to analyze: {len(files)}")
+        if start_index > 0:
+            print(f"Resuming from file index {start_index + 1}")
+        
+        all_task = []
+
+        # Analyze files starting from checkpoint
+        for index, file_info in enumerate(files):
+            filepath = file_info['path']
+            content = file_info['content']
+
+            # Skip if already processed
+            if filepath in processed_files:
+                print(f"[{index + 1}/{len(files)}] Skipping {filepath} (already processed)")
+                continue
+
+            print(f"[{index + 1}/{len(files)}] Analyzing {filepath}...")
+
+            try:
+                # Analyze this file
+                tasks = self.code_analyzer.analyze_file(
+                    file_content=content,
+                    file_path=filepath,
+                    repository=repository
+                )
+
+                all_task.extend(tasks)
+                processed_files.append(filepath)
+
+                if tasks:
+                    print(f"    ✓ Found {len(tasks)} vulnerabilities")
+                else:
+                    print("    ✓ No vulnerabilities found")
+                
+                # Update session progress
+                session.files_analyzed = index + 1
+                session.last_checkpoint_at = timezone.now()
+                session.save()
+
+                # Create checkpoint every N files
+                if (index + 1) % checkpoint_interval == 0:
+                    checkpoint_counter += 1
+                    CheckPoint.objects.create(
+                        session=session,
+                        checkpoint_number=checkpoint_counter,
+                        last_file_index=index,
+                        files_processed=processed_files.copy(),
+                        state_data={
+                            'task_created': len(all_task),
+                            'timestamp': timezone.now().isoformat()
+                        }
+                    )
+                    print(f"  💾 Checkpoint #{checkpoint_counter} saved")
+            except Exception as e:
+                print(f"  ✗ Error analyzing {filepath}: {e}")
+                session.files_failed = index + 1
+                session.save()
+                continue
+        # Update repository status
+        repository.status = 'completed'
+        repository.last_analyzed_at = timezone.now()
+        repository.save()
+
+        # Count actual tasks created in the database
+        from apps.task.models import Task
+
+        actual_tasks_count = Task.objects.filter(
+            repository=repository,
+            created_at__gte=session.started_at
+        ).count()
+
+        return {
+            'vulnerabilities_found': actual_tasks_count,
+            'tasks_created': actual_tasks_count,
+            'files_analyzed': len(processed_files),
+            'files_failed': session.files_failed
+        }
 
 

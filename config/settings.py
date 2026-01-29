@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'apps.gemini_analyzer',
     'apps.github_integration',
     'apps.verification',
+    'apps.analysis_session',
 ]
 
 MIDDLEWARE = [
@@ -141,3 +142,14 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 GEMINI_API_KEY = config('GEMINI_API_KEY')
+GITHUB_BOT_TOKEN = config('GITHUB_BOT_TOKEN')
+
+# Celery configuration
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max

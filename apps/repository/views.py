@@ -36,6 +36,8 @@ def create_repository(request):
                   - 200 OK: Repository already exists
                   - 400 Bad Request: Invalid data provided
     """
+    from apps.core.tasks import analyze_repository_async
+
     serializer = RepositoryWriteSerializer(
         data=request.data,
         context={'request': request}
@@ -43,44 +45,21 @@ def create_repository(request):
     if serializer.is_valid():
         repository = serializer.save()
 
-        # Trigger analysis immediately
-        analyzer = AnalyzerService()
+        # Get options
+        create_prs = request.data.get('create_prs', False)
 
-        try:
-            tasks = analyzer.analyze_repository(repository.id)
-
-            # Refresh repository to get updated status
-            repository.refresh_from_db()
-
-            # Prepare response with analysis results
-            response_data = RepositorySerializer(repository).data
-            response_data['analysis'] = {
-                'status': 'success',
-                'tasks_created': len(tasks),
-                'message': f'Analysis complete. Found {len(tasks)} security issues.'
-            }
-                    
-        except Exception as e:
-
-            # Analysis failed, but repository exists
-            repository.refresh_from_db()
-            response_data = RepositorySerializer(repository).data
-            response_data['analysis'] = {
-                'status': 'failed',
-                'tasks_created': 0,
-                'message': f'Analysis failed: {str(e)}'
-            }
-            print(f"Analysis failed: {e}")
-
-        created = serializer.context.get('created', False)
-        status_code = (
-            status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        # Start the async analysis
+        task = analyze_repository_async.delay(
+            repository_id=repository.id,
+            create_pr=create_prs
         )
 
-        return Response(
-            response_data,
-            status=status_code
-        )
+        return Response({
+            'repository': RepositorySerializer(repository).data,
+            'task_id': task.id,
+            'session_id': task.session_id,
+            'message': 'Analysis started in background. Use task_id to check status'
+        }, status=status.HTTP_202_ACCEPTED)
 
     return Response(
         serializer.errors,
@@ -123,3 +102,4 @@ def list_repository_tasks(request, repository_id):
         'total_task': len(task_data),
         'tasks': task_data
     })
+

@@ -1,12 +1,12 @@
 """
 Task views module.
 
-This module will contain views for task management.
-Currently empty as views are not yet implemented.
+This module provides API endpoints for task management and status tracking.
 """
-from apps.task.models import Task
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+
+from apps.task.models import Task
 
 
 @api_view(['GET'])
@@ -47,4 +47,33 @@ def get_task_details(request, task_id):
             'status': pr.status
         } if pr else None
     })
+
+
+@api_view(['GET'])
+def get_task_status(request, task_id):
+    """
+    Get status of a background task.
+
+    Args:
+        request: HTTP request object.
+        task_id: Celery task ID.
+
+    Returns:
+        Response: Task status and result if completed.
+    """
+    from celery.result import AsyncResult
+
+    task = AsyncResult(task_id)
+
+    response_data = {
+        'task_id': task_id,
+        'status': task.status,
+    }
+
+    if task.status == 'SUCCESS':
+        response_data['result'] = task.result
+    elif task.status == 'FAILURE':
+        response_data['error'] = str(task.info)
+
+    return Response(response_data)
 
