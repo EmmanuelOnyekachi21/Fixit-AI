@@ -7,5 +7,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('create-repository/', views.create_repository, name="create-repo"),
+    path('', views.create_repository, name='create_repository'),
+    path('<int:repository_id>/tasks/', views.list_repository_tasks, name='list_repository_tasks'),
+    path('<int:repository_id>/pull-requests/', views.create_prs_for_repository, name='create_prs'),
 ]

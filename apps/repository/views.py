@@ -15,6 +15,8 @@ from .serializers import (
 )
 from apps.core.analyzer_service import AnalyzerService
 from django.shortcuts import get_object_or_404
+from apps.task.models import Task
+from apps.verification.services.verification_orchestrator import VerificationOrchestrator
 
 
 @api_view(['POST'])
@@ -101,5 +103,63 @@ def list_repository_tasks(request, repository_id):
         'repository_id': repository_id,
         'total_task': len(task_data),
         'tasks': task_data
+    })
+
+
+@api_view(['POST'])
+def create_prs_for_repository(request, repository_id):
+    """
+    Create PRs for all verified fixes in a repository.
+
+    URL: /api/v1/repositories/{repository_id}/pull-requests/
+
+    Returns:
+        {
+            'message': 'Created X pull requests',
+            'prs': [
+                {'task_id': 1, 'pr_url': 'https://...'},
+                ...
+            ]
+        }
+    """
+    try:
+        repository = Repository.objects.get(id=repository_id)
+    except Repository.DoesNotExist:
+        return Response(
+            {'error': 'Repository not found'},
+            status=404
+        )
+    
+    # Get all verified tasks without PRs
+    verified_tasks = Task.objects.filter(
+        repository=repository,
+        fix_status='verified',
+        pull_requests__isnull=True
+    )
+
+    if not verified_tasks.exists():
+        return Response({
+            'message': 'No verified fixes to create PRs for',
+            'prs': []
+        })
+    
+    orchestrator = VerificationOrchestrator()
+    created_prs = []
+
+    for task in verified_tasks:
+        try:
+            orchestrator._create_github_pr(task)
+            pr = task.pull_requests.first()
+            created_prs.append({
+                'task_id': task.id,
+                'pr_url': pr.pr_url if pr else None
+            })
+        except Exception as e:
+            print(f"failed to create PR for task {task.id}: {e}")
+            # continue with other tasks
+    
+    return Response({
+        'message': f'Created {len(created_prs)} pull requests',
+        'prs': created_prs
     })
 
