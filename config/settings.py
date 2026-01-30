@@ -42,6 +42,7 @@ INSTALLED_APPS = [
 
     # Third party apps
     'rest_framework',
+    'corsheaders',
 
     # My apps
     'apps.repository',
@@ -55,6 +56,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -153,3 +155,6 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max
+
+# Allow all origins - use with extreme caution
+CORS_ALLOW_ALL_ORIGINS = True
