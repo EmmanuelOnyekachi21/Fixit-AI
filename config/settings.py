@@ -27,12 +27,13 @@ SECRET_KEY = 'django-insecure-9dk-bfb9$b^5whnz!vewl1=vjk(mcom+vfi%l01r@h2dq+3$e+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']  # Allow all hosts for development
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -43,6 +44,7 @@ INSTALLED_APPS = [
     # Third party apps
     'rest_framework',
     'corsheaders',
+    'channels',
 
     # My apps
     'apps.repository',
@@ -158,3 +160,21 @@ CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max
 
 # Allow all origins - use with extreme caution
 CORS_ALLOW_ALL_ORIGINS = True
+
+# Channels configuration
+ASGI_APPLICATION = 'config.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [('localhost', 6379)],
+        },
+    }
+}
+
+# # CORS for WebSocket
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:5173,"
+#     "http://localhost:3000,"
+# ]

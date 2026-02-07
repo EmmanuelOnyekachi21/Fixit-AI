@@ -50,17 +50,31 @@ def create_repository(request):
         # Get options
         create_prs = request.data.get('create_prs', False)
 
-        # Start the async analysis
+        # Create session first
+        import uuid
+        from django.utils import timezone
+        from apps.analysis_session.models import AnalysisSession
+        
+        session = AnalysisSession.objects.create(
+            repository=repository,
+            session_id=str(uuid.uuid4()),
+            status='running',
+            started_at=timezone.now(),
+            create_prs=create_prs
+        )
+
+        # Start the async analysis with the session_id
         task = analyze_repository_async.delay(
             repository_id=repository.id,
+            session_id=str(session.session_id),
             create_pr=create_prs
         )
 
         return Response({
             'repository': RepositorySerializer(repository).data,
             'task_id': task.id,
-            'session_id': task.session_id,
-            'message': 'Analysis started in background. Use task_id to check status'
+            'session_id': str(session.session_id),
+            'message': 'Analysis started in background. Use session_id to check status'
         }, status=status.HTTP_202_ACCEPTED)
 
     return Response(
@@ -83,21 +97,29 @@ def list_repository_tasks(request, repository_id):
     
     tasks = Task.objects.filter(
         repository=repository
-    )
+    ).select_related('repository').prefetch_related('pull_requests')
 
-    task_data = [
-        {
+    task_data = []
+    for task in tasks:
+        pr = task.pull_requests.first()
+        task_data.append({
             'id': task.id,
             'title': task.title,
+            'description': task.description,
             'vulnerability_type': task.vulnerability_type,
             'file_path': task.file_path,
             'line_number': task.line_number,
+            'severity': task.severity,
             'status': task.status,
             'test_status': task.test_status,
             'fix_status': task.fix_status,
-            'has_pr': task.pull_requests.exists()
-        } for task in tasks
-    ]
+            'original_code': task.original_code or '',
+            'fix_code': task.fix_code or '',
+            'fix_explanation': task.fix_explanation or '',
+            'test_code': task.test_code or '',
+            'pr_url': pr.pr_url if pr else None,
+            'created_at': task.created_at.isoformat() if task.created_at else None,
+        })
 
     return Response({
         'repository_id': repository_id,

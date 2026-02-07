@@ -158,3 +158,49 @@ def resume_session(request, session_id):
             {'error': 'Session not found.'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+@api_view(['GET'])
+def list_sessions(request):
+    """
+    List all analysis sessions with summary data.
+
+    Args:
+        request: HTTP request object.
+    
+    Returns:
+    """
+    limit = int(request.GET.get('limit', 10))
+
+    # Get recent sessions for the TAble
+    recent_sessions = AnalysisSession.objects.select_related('repository').order_by('-started_at')[:limit]
+    
+    sessions_data = []
+
+    for session in recent_sessions:
+        sessions_data.append({
+            'id': session.session_id,
+            'repository_name': f"{session.repository.owner}/{session.repository.repo_name}",
+            'status': session.status,
+            'files_analyzed': session.files_analyzed,
+            'vulnerabilities_found': session.vulnerabilities_found,
+            'prs_created': session.prs_created,
+            'started_at': session.started_at,
+        })
+    
+    # Calculate totals from ALL sessions for the STATS CARDS
+    all_sessions = AnalysisSession.objects.all()
+
+    summary = {
+        'total_scans': all_sessions.filter(status='completed').count(),
+        'total_files': sum(s.files_analyzed for s in all_sessions),
+        'total_vulnerabilities': sum(s.vulnerabilities_found for s in all_sessions),
+        'total_prs': sum(s.repository.pull_requests.count() for s in all_sessions),
+    }
+    
+    return Response({
+        'sessions': sessions_data,
+        'summary': summary
+    }, status=status.HTTP_200_OK)
+
+

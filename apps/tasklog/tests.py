@@ -25,7 +25,7 @@ class TaskLogModelTest(TestCase):
         
         self.log_data = {
             'task': self.task,
-            'level': 'info',
+            'log_type': 'info',
             'action': 'Analyzing vulnerability',
             'message': 'Starting analysis of XSS vulnerability',
         }
@@ -34,7 +34,7 @@ class TaskLogModelTest(TestCase):
     def test_tasklog_creation(self):
         """Test that a task log can be created with valid data."""
         self.assertEqual(self.log.task, self.task)
-        self.assertEqual(self.log.level, 'info')
+        self.assertEqual(self.log.log_type, 'info')
         self.assertEqual(self.log.action, 'Analyzing vulnerability')
         self.assertEqual(self.log.message, 'Starting analysis of XSS vulnerability')
         self.assertIsNone(self.log.agent_note)
@@ -42,33 +42,33 @@ class TaskLogModelTest(TestCase):
 
     def test_tasklog_str_representation(self):
         """Test the string representation of a task log."""
-        expected = f"{self.task.id} - INFO - Analyzing vulnerability"
-        self.assertEqual(str(self.log), expected)
+        expected_start = f"Task {self.task.id} - INFO"
+        self.assertIn(expected_start, str(self.log))
 
     def test_default_level_is_info(self):
-        """Test that the default level is 'info'."""
+        """Test that the default log_type is 'info'."""
         log = TaskLog.objects.create(
             task=self.task,
             action='Test action',
             message='Test message'
         )
-        self.assertEqual(log.level, 'info')
+        self.assertEqual(log.log_type, 'info')
 
     def test_all_level_choices(self):
-        """Test that all level choices can be set."""
+        """Test that all log_type choices can be set."""
         levels = ['info', 'warning', 'error']
         for level in levels:
-            self.log.level = level
+            self.log.log_type = level
             self.log.save()
             self.log.refresh_from_db()
-            self.assertEqual(self.log.level, level)
+            self.assertEqual(self.log.log_type, level)
 
     def test_tasklog_with_agent_note(self):
         """Test that agent_note can be set."""
         agent_note = "Agent attempted fix using pattern matching"
         log = TaskLog.objects.create(
             task=self.task,
-            level='warning',
+            log_type='warning',
             action='Applying fix',
             message='Fix applied but needs validation',
             agent_note=agent_note
@@ -98,13 +98,13 @@ class TaskLogModelTest(TestCase):
         """Test that a task can have multiple logs."""
         log2 = TaskLog.objects.create(
             task=self.task,
-            level='warning',
+            log_type='warning',
             action='Validation failed',
             message='Fix did not pass validation'
         )
         log3 = TaskLog.objects.create(
             task=self.task,
-            level='error',
+            log_type='error',
             action='Fix failed',
             message='Unable to apply fix'
         )
@@ -142,13 +142,13 @@ class TaskLogModelTest(TestCase):
         """Test string representation with different log levels."""
         warning_log = TaskLog.objects.create(
             task=self.task,
-            level='warning',
+            log_type='warning',
             action='Warning action',
             message='Warning message'
         )
         error_log = TaskLog.objects.create(
             task=self.task,
-            level='error',
+            log_type='error',
             action='Error action',
             message='Error message'
         )

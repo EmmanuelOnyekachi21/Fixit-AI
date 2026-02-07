@@ -14,17 +14,17 @@ class TaskLogAdmin(admin.ModelAdmin):
     Admin interface configuration for the TaskLog model.
     
     Provides an interface for creating and viewing task logs with filtering
-    by level and task, and displays a preview of log messages.
+    by log_type and task, and displays a preview of log messages.
     """
     list_display = (
         'timestamp',
         'task',
-        'level',
+        'log_type',
         'action',
         'short_message',
     )
 
-    list_filter = ('level', 'task')
+    list_filter = ('log_type', 'task')
     ordering = ('-timestamp',)
 
     readonly_fields = ('timestamp',)

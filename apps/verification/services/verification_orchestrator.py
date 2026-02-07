@@ -351,61 +351,80 @@ class VerificationOrchestrator:
             "Creating Github pull request..."
         )
 
-        # Get authenticated Github client
-        github_client = self.github_client.get_authenticated_client()
+        try:
+            # Get authenticated Github client
+            github_client = self.github_client.get_authenticated_client()
 
-        # Create branch
-        branch_manager = BranchManager(github_client)
-        branch_name = branch_manager.create_fix_branch(
-            task.repository.owner,
-            task.repository.repo_name,
-            task.id,
-            task.vulnerability_type
-        )
-        self._log(
-            task,
-            f"Created branch: {branch_name}"
-        )
+            # Create branch
+            branch_manager = BranchManager(github_client)
+            branch_name = branch_manager.create_fix_branch(
+                task.repository.owner,
+                task.repository.repo_name,
+                task.id,
+                task.vulnerability_type
+            )
+            self._log(
+                task,
+                f"Created branch: {branch_name}"
+            )
 
-        # Generate test file path
-        test_path = (
-            f"tests/test_{task.file_path.replace('/', '_')}"
-        )
+            # Generate test file path
+            import os
+            file_dir = os.path.dirname(task.file_path) if task.file_path else ''
+            file_name = os.path.basename(task.file_path) if task.file_path else 'fix'
+            test_file_name = f"test_{file_name}"
+            test_path = os.path.join(file_dir, test_file_name) if file_dir else test_file_name
 
-        # Commit fix and test to branch
-        commit_service = CommitService(github_client)
-        commit_sha = commit_service.commit_fix(
-            task.repository.owner,
-            task.repository.repo_name,
-            branch_name,
-            task.file_path,
-            task.fix_code,
-            test_path,
-            task.test_code,
-            commit_message=commit_service.generate_commit_message(task)
-        )
+            # Commit fix and test to branch
+            commit_service = CommitService(github_client)
+            commit_message = commit_service.generate_commit_message(task)
+            
+            commit_sha = commit_service.commit_fix(
+                task.repository.owner,
+                task.repository.repo_name,
+                branch_name,
+                task.file_path,
+                task.fix_code,
+                test_path,
+                task.test_code,
+                commit_message=commit_message
+            )
 
-        self._log(
-            task,
-            f"Committed fix to branch (SHA: {commit_sha[:7]})"
-        )
+            self._log(
+                task,
+                f"Committed fix to branch (SHA: {commit_sha[:7]})"
+            )
 
-        # Create pull request
-        pr_creator = PRCreator(github_client)
-        pr = pr_creator.create_pull_request(
-            task=task,
-            branch_name=branch_name,
-            owner=task.repository.owner,
-            repo_name=task.repository.repo_name
-        )
+            # Create pull request
+            pr_creator = PRCreator(github_client)
+            pr = pr_creator.create_pull_request(
+                task=task,
+                branch_name=branch_name,
+                owner=task.repository.owner,
+                repo_name=task.repository.repo_name
+            )
 
+            # Update task with PR info
+            task.pr_url = pr.pr_url
+            task.status = 'pr_created'
+            task.save()
 
-        # Update task status
-        task.status = 'pr_created'
-        task.save()
-
-        self._log(
-            task,
-            f"Pull request created: {pr.pr_url}"
-        )
+            self._log(
+                task,
+                f"Pull request created: {pr.pr_url}"
+            )
+            
+        except Exception as e:
+            self._log(
+                task,
+                f"Failed to create PR: {str(e)}",
+                level="error"
+            )
+            task.status = 'completed'  # Still mark as completed, just no PR
+            task.validation_message = (
+                f"{task.validation_message or ''}\n"
+                f"PR creation failed: {str(e)}"
+            )
+            task.save()
+            raise
         

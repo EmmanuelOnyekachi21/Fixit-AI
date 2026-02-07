@@ -132,6 +132,35 @@ class Task(models.Model):
         blank=True,
         help_text="Original vulnerable code from the file"
     )
+    
+    # Fix explanation
+    fix_explanation = models.TextField(
+        blank=True,
+        help_text="Explanation of what was fixed and why"
+    )
+    
+    # PR information
+    pr_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="URL of the created Pull Request"
+    )
+    
+    # Severity level
+    SEVERITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('critical', 'Critical'),
+    ]
+    
+    severity = models.CharField(
+        max_length=20,
+        choices=SEVERITY_CHOICES,
+        default='medium',
+        help_text="Severity level of the vulnerability"
+    )
 
     def __str__(self):
         """

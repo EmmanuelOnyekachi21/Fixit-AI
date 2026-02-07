@@ -220,11 +220,25 @@ class AnalyzerService:
         """
         from apps.analysis_session.models import CheckPoint
         from django.utils import timezone
+        from apps.tasklog.utils import create_session_log, broadcast_progress_update
+        from apps.tasklog.models import LogType
+
+        # Log: Starting analysis
+        create_session_log(
+            session,
+            f"🚀 Starting analysis of {repository.owner}/{repository.repo_name}",
+            LogType.INFO
+        )
 
         # Check for existing checkpoint to resume frim
         last_checkpoint = session.checkpoints.first()
         if last_checkpoint:
             print(f"Resuming from checkpoint #{last_checkpoint.checkpoint_number}")
+            create_session_log(
+                session,
+                f"↻ Resuming from checkpoint #{last_checkpoint.checkpoint_number}",
+                LogType.INFO
+            )
             processed_files = last_checkpoint.files_processed
             start_index = last_checkpoint.last_file_index + 1
             checkpoint_counter = last_checkpoint.checkpoint_number
@@ -234,6 +248,12 @@ class AnalyzerService:
             checkpoint_counter = 0
         
         # Fetch files from Github
+        create_session_log(
+            session,
+            "📥 Fetching repository files from GitHub...",
+            LogType.INFO
+        )
+        
         files = self.github_service.get_repo_files(
             repository.owner,
             repository.repo_name
@@ -243,9 +263,20 @@ class AnalyzerService:
         session.total_files = len(files)
         session.save()
 
+        create_session_log(
+            session,
+            f"📊 Found {len(files)} files to analyze",
+            LogType.SUCCESS
+        )
+
         print(f"Total files to analyze: {len(files)}")
         if start_index > 0:
             print(f"Resuming from file index {start_index + 1}")
+            create_session_log(
+                session,
+                f"⏩ Skipping {start_index} already processed files",
+                LogType.INFO
+            )
         
         all_task = []
 
@@ -258,6 +289,13 @@ class AnalyzerService:
             if filepath in processed_files:
                 print(f"[{index + 1}/{len(files)}] Skipping {filepath} (already processed)")
                 continue
+
+            # Log: Scanning file
+            create_session_log(
+                session,
+                f"→ Scanning {filepath}...",
+                LogType.INFO
+            )
 
             print(f"[{index + 1}/{len(files)}] Analyzing {filepath}...")
 
@@ -274,13 +312,31 @@ class AnalyzerService:
 
                 if tasks:
                     print(f"    ✓ Found {len(tasks)} vulnerabilities")
+                    # Update vulnerability count in real-time
+                    session.vulnerabilities_found = len(all_task)
+                    # Log: Found vulnerabilities
+                    for task in tasks:
+                        create_session_log(
+                            session,
+                            f"⚠️  Found {task.vulnerability_type} in {filepath}",
+                            LogType.WARNING
+                        )
                 else:
                     print("    ✓ No vulnerabilities found")
+                    # Log: File clean
+                    create_session_log(
+                        session,
+                        f"✓ No issues found in {filepath}",
+                        LogType.SUCCESS
+                    )
                 
                 # Update session progress
                 session.files_analyzed = index + 1
                 session.last_checkpoint_at = timezone.now()
                 session.save()
+                
+                # Broadcast progress update
+                broadcast_progress_update(session)
 
                 # Create checkpoint every N files
                 if (index + 1) % checkpoint_interval == 0:
@@ -296,9 +352,20 @@ class AnalyzerService:
                         }
                     )
                     print(f"  💾 Checkpoint #{checkpoint_counter} saved")
+                    create_session_log(
+                        session,
+                        f"💾 Checkpoint #{checkpoint_counter} saved ({index + 1}/{len(files)} files)",
+                        LogType.INFO
+                    )
             except Exception as e:
                 print(f"  ✗ Error analyzing {filepath}: {e}")
-                session.files_failed = index + 1
+                # Log: Error
+                create_session_log(
+                    session,
+                    f"✗ Error analyzing {filepath}: {str(e)}",
+                    LogType.ERROR
+                )
+                session.files_failed += 1
                 session.save()
                 continue
         # Update repository status
@@ -313,6 +380,17 @@ class AnalyzerService:
             repository=repository,
             created_at__gte=session.started_at
         ).count()
+
+        # Log: Analysis complete
+        create_session_log(
+            session,
+            f"🎉 Analysis complete! Found {actual_tasks_count} vulnerabilities across {len(processed_files)} files",
+            LogType.SUCCESS
+        )
+        
+        # Broadcast completion
+        from apps.tasklog.utils import broadcast_analysis_complete
+        broadcast_analysis_complete(session)
 
         return {
             'vulnerabilities_found': actual_tasks_count,

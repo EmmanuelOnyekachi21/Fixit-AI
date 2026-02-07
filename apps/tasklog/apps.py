@@ -10,3 +10,6 @@ class TasklogConfig(AppConfig):
     """Configuration for the TaskLog application."""
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'apps.tasklog'
+
+    def ready(self):
+        import apps.tasklog.signals
