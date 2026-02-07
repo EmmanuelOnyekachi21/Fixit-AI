@@ -197,14 +197,67 @@ graph TD
 
 ## 🛠️ Tech Stack
 
-| Component | Technology |
-| :--- | :--- |
-| **Language** | Python 3.10+ |
-| **Framework** | Django 5.0 (REST Framework) |
-| **AI Model** | Gemini 3 API |
-| **Database** | PostgreSQL |
-| **Testing** | pytest (Isolated Environments) |
-| **Version Control** | GitHub API Integration |
+| Component | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Backend Framework** | Django 5.0 + Django REST Framework | API server and business logic |
+| **Frontend** | React 18 + TypeScript + Vite | Modern, responsive UI |
+| **AI Model** | Gemini 3 API | Code analysis, vulnerability detection, fix generation |
+| **Database** | PostgreSQL | Persistent state storage |
+| **Cache & Message Broker** | Redis | Celery task queue and WebSocket channel layer |
+| **Task Queue** | Celery | Asynchronous background processing |
+| **Real-Time Communication** | Django Channels + WebSockets | Live progress updates |
+| **Testing Framework** | pytest | Isolated test execution |
+| **Version Control Integration** | GitHub API (PyGithub) | Automated PR creation |
+| **Styling** | TailwindCSS | Modern, utility-first CSS |
+
+### System Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         FIXIT SYSTEM                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────────┐         ┌──────────────┐                    │
+│  │   React UI   │◄────────┤   WebSocket  │                    │
+│  │  (Frontend)  │  Live   │   Consumer   │                    │
+│  └──────┬───────┘ Updates └──────▲───────┘                    │
+│         │                         │                             │
+│         │ HTTP/REST              │ Redis                       │
+│         ▼                         │ Pub/Sub                    │
+│  ┌──────────────┐         ┌──────┴───────┐                    │
+│  │    Django    │◄────────┤    Redis     │                    │
+│  │  REST API    │         │ Channel Layer│                    │
+│  └──────┬───────┘         └──────────────┘                    │
+│         │                                                       │
+│         │ Enqueue Tasks                                        │
+│         ▼                                                       │
+│  ┌──────────────┐         ┌──────────────┐                    │
+│  │    Celery    │◄────────┤    Redis     │                    │
+│  │   Workers    │  Queue  │    Broker    │                    │
+│  └──────┬───────┘         └──────────────┘                    │
+│         │                                                       │
+│         │ Process Tasks                                        │
+│         ▼                                                       │
+│  ┌──────────────────────────────────────┐                     │
+│  │   VerificationOrchestrator           │                     │
+│  │  ┌────────────────────────────────┐  │                     │
+│  │  │ 1. TestGenerator (Gemini 3)   │  │                     │
+│  │  │ 2. TestRunner (pytest)        │  │                     │
+│  │  │ 3. FixGenerator (Gemini 3)    │  │                     │
+│  │  │ 4. TestRunner (verify)        │  │                     │
+│  │  │ 5. GitHub Integration         │  │                     │
+│  │  └────────────────────────────────┘  │                     │
+│  └──────┬───────────────────────────────┘                     │
+│         │                                                       │
+│         │ Store Results                                        │
+│         ▼                                                       │
+│  ┌──────────────┐                                              │
+│  │  PostgreSQL  │                                              │
+│  │   Database   │                                              │
+│  └──────────────┘                                              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
