@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Github, Play, Clock, FileCode, AlertTriangle, GitPullRequest, Shield, CheckCircle } from 'lucide-react';
-import { mockRepositories } from '../data/mockData';
+import { Github, Play, FileCode, AlertTriangle, Shield, CheckCircle } from 'lucide-react';
 import type { AnalysisStatus } from '../types';
 import { StatsCard } from '../components/StatsCard';
+
+import { getSessions, startAnalysis, isBackendAvailable } from '../api'
+
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -11,13 +13,51 @@ export default function Dashboard() {
   const [autoCreatePRs, setAutoCreatePRs] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const handleAnalyze = () => {
+  // state for data
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [summary, setSummary] = useState<any>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [usingMockData, setUsingMockData] = useState(false);
+
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const data = await getSessions();
+        setSessions(data.sessions);
+        setSummary(data.summary);
+        setUsingMockData(!isBackendAvailable());
+      } catch (err: any) {
+        console.error('Error fetching sessions:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [])
+
+  const handleAnalyze = async () => {
     if (!repoUrl.trim()) return;
     
     setIsAnalyzing(true);
-    setTimeout(() => {
-      navigate('/analysis/demo');
-    }, 500);
+    
+    try {
+      const result = await startAnalysis(repoUrl, autoCreatePRs);
+      
+      // Navigate to analysis progress page with session ID
+      if (result.session_id) {
+        navigate(`/analysis/${result.session_id}`);
+      } else {
+        // Fallback to demo if no session ID
+        navigate('/analysis/demo');
+      }
+    } catch (error: any) {
+      console.error('Failed to start analysis:', error);
+      alert(error.message || 'Failed to start analysis. Please check the repository URL.');
+      setIsAnalyzing(false);
+    }
   };
 
   const getStatusColor = (status: AnalysisStatus) => {
@@ -44,10 +84,10 @@ export default function Dashboard() {
   };
 
   // Calculate summary stats
-  const totalFiles = mockRepositories.reduce((sum, repo) => sum + repo.files_analyzed, 0);
-  const totalVulnerabilities = mockRepositories.reduce((sum, repo) => sum + repo.vulnerabilities_found, 0);
-  const totalPRs = mockRepositories.reduce((sum, repo) => sum + repo.prs_created, 0);
-  const completedSessions = mockRepositories.filter(r => r.status === 'completed').length;
+  const totalFiles = summary?.total_files || 0;
+  const totalVulnerabilities = summary?.total_vulnerabilities || 0;
+  const totalPRs = summary?.total_prs || 0;
+  const completedSessions = summary?.total_scans || 0;
 
   return (
     <div className="space-y-8">
@@ -59,6 +99,12 @@ export default function Dashboard() {
         <p className="text-lg text-gray-400 max-w-2xl mx-auto">
           AI-powered vulnerability detection, test generation, and automated fixes
         </p>
+        {usingMockData && (
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+            <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+            <span className="text-sm text-yellow-400">Demo Mode - Using sample data</span>
+          </div>
+        )}
       </div>
 
       {/* Summary Stats */}
@@ -175,53 +221,66 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
-              {mockRepositories.map((repo) => (
-                <tr
-                  key={repo.id}
-                  onClick={() => navigate(`/analysis/${repo.id}`)}
-                  className="hover:bg-gray-800/50 cursor-pointer transition-colors"
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <Github className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm font-medium text-white">{repo.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(
-                        repo.status
-                      )} ${repo.status === 'running' ? 'animate-pulse' : ''}`}
-                    >
-                      {repo.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-gray-300">
-                      <FileCode className="h-4 w-4 text-gray-500" />
-                      {repo.files_analyzed}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-gray-300">
-                      <AlertTriangle className="h-4 w-4 text-orange-500" />
-                      {repo.vulnerabilities_found}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-gray-300">
-                      <GitPullRequest className="h-4 w-4 text-green-500" />
-                      {repo.prs_created}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-1 text-sm text-gray-400">
-                      <Clock className="h-4 w-4" />
-                      {formatDate(repo.started_at)}
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center">
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                      <span className="text-gray-400">Loading sessions...</span>
                     </div>
                   </td>
                 </tr>
-              ))}
+              ) : sessions.length > 0 ? (
+                  sessions.map((session: any) => (
+                    <tr 
+                      key={session.id} 
+                      onClick={() => {
+                        if (session.status === 'completed') {
+                          navigate('/vulnerabilities');
+                        } else {
+                          navigate(`/analysis/${session.session_id}`);
+                        }
+                      }}
+                      className="hover:bg-gray-800/30 transition-colors cursor-pointer"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10 bg-gray-700 rounded-lg flex items-center justify-center">
+                            <Github className="h-6 w-6 text-blue-500" />
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-white">{session.repository_name}</div>
+                            <div className="text-sm text-gray-400">{session.repository_name.split('/')[0]}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full border ${getStatusColor(session.status)}`}>
+                          {session.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                        {session.files_analyzed}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                        {session.vulnerabilities_found}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                        {session.prs_created}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                        {formatDate(session.started_at)}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
+                      No analysis sessions found
+                    </td>
+                  </tr>
+                )
+              }
             </tbody>
           </table>
         </div>

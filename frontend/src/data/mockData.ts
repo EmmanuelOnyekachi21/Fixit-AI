@@ -61,6 +61,7 @@ export const mockTasks: Task[] = [
     assert User.objects.filter(username=malicious_input).count() == 0`,
     test_status: 'passed',
     fix_status: 'pr_created',
+    status: 'pr_created',
     pr_url: 'https://github.com/django/django/pull/1234',
   },
   {
@@ -85,6 +86,7 @@ export const mockTasks: Task[] = [
     assert '&lt;script&gt;' in response.content.decode()`,
     test_status: 'passed',
     fix_status: 'verified',
+    status: 'completed',
   },
   {
     id: 3,
@@ -108,6 +110,7 @@ export const mockTasks: Task[] = [
     assert response.status_code == 403`,
     test_status: 'passed',
     fix_status: 'pr_created',
+    status: 'pr_created',
     pr_url: 'https://github.com/django/django/pull/1235',
   },
   {
@@ -130,7 +133,8 @@ def load_session(session_data):
     with pytest.raises(json.JSONDecodeError):
         load_session(malicious_pickle)`,
     test_status: 'passed',
-    fix_status: 'test_generated',
+    fix_status: 'generated',
+    status: 'completed',
   },
   {
     id: 5,
@@ -161,7 +165,8 @@ DATABASE_CONFIG = {
         if isinstance(node, ast.Str):
             assert 'password' not in node.s.lower()`,
     test_status: 'pending',
-    fix_status: 'detected',
+    fix_status: 'pending',
+    status: 'pending',
   },
 ];
 

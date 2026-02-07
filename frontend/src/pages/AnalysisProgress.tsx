@@ -1,17 +1,129 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Pause, X, FileCode, AlertTriangle, CheckCircle, GitPullRequest, Clock } from 'lucide-react';
+import { Pause, X, FileCode, AlertTriangle, CheckCircle, GitPullRequest, Clock, Wifi, WifiOff } from 'lucide-react';
 import type { AnalysisSession, LogEntry } from '../types';
 import { createMockSession, generateMockLog } from '../data/mockData';
+import { getSessionStatus } from '../api';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 export default function AnalysisProgress() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [session, setSession] = useState<AnalysisSession>(createMockSession(Number(id) || 1));
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isPaused, setIsPaused] = useState(false);
+  const [usingWebSocket, setUsingWebSocket] = useState(false);
 
+  // WebSocket connection for real-time updates
+  const wsUrl = id && id !== 'demo'
+    ? `ws://localhost:8000/ws/sessions/${id}/`
+    : null;
+
+  const { isConnected } = useWebSocket(wsUrl, {
+    onConnect: () => {
+      console.log('✅ WebSocket connected - Real-time updates enabled');
+      setUsingWebSocket(true);
+    },
+    onDisconnect: () => {
+      console.log('❌ WebSocket disconnected - Falling back to polling');
+      setUsingWebSocket(false);
+    },
+    onMessage: (message) => {
+      console.log('WebSocket message:', message);
+
+      switch (message.type) {
+        case 'session_status':
+          // Initial status when connecting
+          updateSessionFromData(message.data);
+          break;
+
+        case 'session_update':
+          // Progress update
+          setSession((prev) => ({
+            ...prev,
+            files_analyzed: message.data.files_analyzed || prev.files_analyzed,
+            total_files: message.data.total_files || prev.total_files,
+            progress_percentage: message.data.progress_percentage || prev.progress_percentage,
+            vulnerabilities_found: message.data.vulnerabilities_found || prev.vulnerabilities_found,
+            current_file: message.data.current_file || prev.current_file,
+            estimated_time_remaining: message.data.estimated_time_remaining_seconds !== null && message.data.estimated_time_remaining_seconds !== undefined 
+              ? message.data.estimated_time_remaining_seconds 
+              : prev.estimated_time_remaining,
+          }));
+          break;
+
+        case 'new_log':
+          // New log entry - add to top of list
+          setLogs((prev) => [message.data, ...prev].slice(0, 100));
+          break;
+
+        case 'analysis_complete':
+          // Analysis finished
+          setSession((prev) => ({
+            ...prev,
+            status: 'completed',
+            progress_percentage: 100,
+            vulnerabilities_found: message.data.vulnerabilities_found || prev.vulnerabilities_found,
+          }));
+          // Auto-redirect to vulnerabilities page after 2 seconds
+          setTimeout(() => {
+            navigate('/vulnerabilities');
+          }, 2000);
+          break;
+
+        case 'error':
+          console.error('WebSocket error:', message.message);
+          if (message.message === 'Session not found') {
+            alert('Session not found. Redirecting to dashboard.');
+            navigate('/');
+          }
+          break;
+      }
+    },
+  });
+
+  const updateSessionFromData = (data: any) => {
+    const estimatedTime = data.estimated_time_remaining_seconds;
+    
+    setSession({
+      session_id: data.session_id,
+      repository_id: data.repository.id,
+      status: data.status,
+      total_files: data.progress.total_files,
+      files_analyzed: data.progress.files_analyzed,
+      vulnerabilities_found: data.results.vulnerabilities_found,
+      progress_percentage: data.progress.percentage,
+      estimated_time_remaining: estimatedTime !== null && estimatedTime !== undefined ? estimatedTime : 0,
+      current_file: data.current_file || '',
+      logs: [],
+    });
+
+    if (data.logs) {
+      setLogs(data.logs);
+    }
+  };
+
+  // Fallback: HTTP polling when WebSocket unavailable
   useEffect(() => {
-    if (isPaused || session.status !== 'running') return;
+    if (usingWebSocket || !id || id === 'demo') return;
+
+    const fetchStatus = async () => {
+      try {
+        const data = await getSessionStatus(id);
+        updateSessionFromData(data);
+      } catch (error) {
+        console.error('Failed to fetch session status:', error);
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 3000);
+    return () => clearInterval(interval);
+  }, [id, usingWebSocket]);
+
+  // Fallback to mock simulation for demo mode
+  useEffect(() => {
+    if (id !== 'demo' || isPaused || session.status !== 'running') return;
 
     const interval = setInterval(() => {
       setSession((prev) => {
@@ -23,6 +135,9 @@ export default function AnalysisProgress() {
         const newProgress = Math.round((newFilesAnalyzed / prev.total_files) * 100);
         const newVulnerabilities = Math.random() > 0.7 ? prev.vulnerabilities_found + 1 : prev.vulnerabilities_found;
         const newLog = generateMockLog(newFilesAnalyzed, prev.total_files);
+
+        // Add log to logs state
+        setLogs((prevLogs) => [newLog, ...prevLogs].slice(0, 50));
 
         return {
           ...prev,
@@ -37,7 +152,7 @@ export default function AnalysisProgress() {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [isPaused, session.status]);
+  }, [isPaused, session.status, id]);
 
   const handleCancel = () => {
     setSession((prev) => ({ ...prev, status: 'failed' }));
@@ -56,7 +171,32 @@ export default function AnalysisProgress() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">Analysis in Progress</h1>
-          <p className="text-gray-400 mt-1">Repository: django/django</p>
+          <p className="text-gray-400 mt-1">
+            Repository: {session.repository_id ? `Repository #${session.repository_id}` : 'django/django'}
+          </p>
+          <div className="flex items-center gap-3 mt-2">
+            {id !== 'demo' && (
+              <div className="flex items-center gap-2 text-sm">
+                {isConnected ? (
+                  <>
+                    <Wifi className="h-4 w-4 text-green-500" />
+                    <span className="text-green-400">Real-time updates</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="h-4 w-4 text-yellow-500" />
+                    <span className="text-yellow-400">Polling mode</span>
+                  </>
+                )}
+              </div>
+            )}
+            {id === 'demo' && (
+              <span className="inline-flex items-center gap-1 text-xs text-yellow-400">
+                <div className="h-1.5 w-1.5 rounded-full bg-yellow-500"></div>
+                Demo Mode
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex gap-3">
           <button
@@ -161,14 +301,20 @@ export default function AnalysisProgress() {
 
       {/* Live Log Feed */}
       <div className="bg-gray-900 border border-gray-800 rounded-lg shadow-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-800">
+        <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
           <h2 className="text-xl font-semibold text-white">Live Activity Log</h2>
+          {isConnected && (
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+              <span className="text-xs text-green-400">Live</span>
+            </div>
+          )}
         </div>
         <div className="p-4 h-96 overflow-y-auto scrollbar-thin space-y-2">
-          {session.logs.length === 0 ? (
+          {logs.length === 0 ? (
             <p className="text-gray-500 text-center py-8">Waiting for analysis to start...</p>
           ) : (
-            session.logs.map((log) => (
+            logs.map((log) => (
               <div
                 key={log.id}
                 className="flex items-start gap-3 p-3 bg-gray-800/50 rounded-lg animate-slide-up"
@@ -176,11 +322,11 @@ export default function AnalysisProgress() {
                 <span className="text-xs text-gray-500 font-mono whitespace-nowrap">
                   {new Date(log.timestamp).toLocaleTimeString()}
                 </span>
-                <span className={`text-sm font-mono ${
-                  log.type === 'success' ? 'text-green-400' : 
-                  log.type === 'error' ? 'text-red-400' : 
-                  'text-gray-300'
-                }`}>
+                <span className={`text-sm font-mono ${log.type === 'success' ? 'text-green-400' :
+                    log.type === 'error' ? 'text-red-400' :
+                      log.type === 'warning' ? 'text-yellow-400' :
+                        'text-gray-300'
+                  }`}>
                   {log.message}
                 </span>
               </div>

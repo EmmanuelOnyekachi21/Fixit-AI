@@ -1,6 +1,8 @@
 export type AnalysisStatus = 'pending' | 'running' | 'completed' | 'failed';
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
-export type TaskStatus = 'detected' | 'test_generated' | 'verified' | 'pr_created';
+export type TaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'false_positive' | 'pr_created';
+export type FixStatus = 'pending' | 'generated' | 'verified' | 'failed' | 'pr_created' | 'pr_failed';
+export type TestStatus = 'pending' | 'generated' | 'passed' | 'failed' | 'error';
 
 export interface Repository {
   id: number;
@@ -24,9 +26,12 @@ export interface Task {
   test_code: string;
   fix_code: string;
   original_code: string;
-  test_status: 'passed' | 'failed' | 'pending';
-  fix_status: TaskStatus;
+  status: TaskStatus;
+  test_status: TestStatus;
+  fix_status: FixStatus;
   pr_url?: string;
+  validation_message?: string;
+  retry_count?: number;
 }
 
 export interface AnalysisSession {
@@ -46,5 +51,5 @@ export interface LogEntry {
   id: number;
   timestamp: string;
   message: string;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
 }

@@ -22,6 +22,7 @@ function App() {
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
+                  {/* :id accepts any string including UUIDs from backend */}
                   <Route path="/analysis/:id" element={<AnalysisProgress />} />
                   <Route path="/vulnerabilities" element={<Vulnerabilities />} />
                   <Route path="/settings" element={<Settings />} />
