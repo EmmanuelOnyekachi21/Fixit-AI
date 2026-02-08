@@ -261,6 +261,52 @@ graph TD
 
 ---
 
+## �  API Documentation
+
+Comprehensive API documentation is available in **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)**.
+
+The documentation includes:
+- **Complete API Reference**: All REST endpoints with request/response examples
+- **WebSocket APIs**: Real-time communication protocols
+- **Data Models**: TypeScript-style type definitions
+- **Workflow Examples**: Step-by-step integration guides
+- **Error Handling**: Standard error formats and status codes
+
+### Quick API Overview
+
+| Category | Endpoints | Purpose |
+|----------|-----------|---------|
+| **Core** | `/api/v1/credentials/validate/` | Validate API credentials |
+| **Repository** | `/api/v1/repositories/` | Create and manage repositories |
+| **Tasks** | `/api/v1/tasks/{id}/` | Manage vulnerability tasks |
+| **Sessions** | `/api/v1/sessions/{id}/status/` | Track analysis progress |
+| **WebSocket** | `ws://host/ws/sessions/{id}/` | Real-time updates |
+
+**Example: Start Analysis**
+```bash
+curl -X POST http://localhost:8000/api/v1/repositories/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repo_url": "https://github.com/owner/repo",
+    "create_prs": true,
+    "gemini_key": "AIzaSy...",
+    "github_token": "ghp_..."
+  }'
+```
+
+**Response:**
+```json
+{
+  "repository": {...},
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "message": "Analysis started in background"
+}
+```
+
+For complete details, see **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)**.
+
+---
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -335,3 +381,37 @@ Visit `http://localhost:8000/admin` to view tasks, logs, and PRs.
 <div align="center">
   <sub>Built with ❤️ by the Fixit Team</sub>
 </div>
+---
+
+## 📚 Complete API Documentation
+
+Fixit provides comprehensive API documentation for hackathon judges and developers:
+
+### 📖 Documentation Suite
+
+| Document | Lines | Purpose |
+|----------|-------|---------|
+| **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)** | 873 | Complete API reference with all endpoints, data models, and examples |
+| **[API_QUICK_REFERENCE.md](./API_QUICK_REFERENCE.md)** | 217 | Quick curl commands and common workflows |
+| **[API_ENDPOINT_MAP.md](./API_ENDPOINT_MAP.md)** | 254 | Visual API structure and flow diagrams |
+| **[API_SUMMARY_FOR_HACKATHON.md](./API_SUMMARY_FOR_HACKATHON.md)** | 385 | Executive summary for hackathon evaluation |
+| **[DOCUMENTATION_INDEX.md](./DOCUMENTATION_INDEX.md)** | 152 | Complete documentation index |
+
+**Total:** 1,881 lines of professional API documentation
+
+### 🎯 Quick Links
+
+- **For Judges:** Start with [API_SUMMARY_FOR_HACKATHON.md](./API_SUMMARY_FOR_HACKATHON.md)
+- **For Developers:** Start with [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
+- **For Testing:** Use [API_QUICK_REFERENCE.md](./API_QUICK_REFERENCE.md)
+- **For Architecture:** Review [API_ENDPOINT_MAP.md](./API_ENDPOINT_MAP.md)
+
+### ✨ API Highlights
+
+- **15 REST Endpoints** - Complete CRUD operations
+- **1 WebSocket Endpoint** - Real-time updates
+- **5 API Categories** - Organized by functionality
+- **Async Processing** - Celery-powered background tasks
+- **Type Safety** - TypeScript-style data models
+- **Error Handling** - Comprehensive error responses
+
