@@ -138,7 +138,7 @@ def generate_fix(request, task_id):
     Manually trigger fix generation for a single task.
     
     POST /api/v1/tasks/{task_id}/generate-fix/
-    Body: {"create_pr": true/false}
+    Body: {"create_pr": true/false, "gemini_key": "...", "github_token": "..."}
     
     Returns:
         {
@@ -159,8 +159,17 @@ def generate_fix(request, task_id):
         if isinstance(create_pr, str):
             create_pr = create_pr.lower() == 'true'
         
-        # Start Celery task
-        result = process_single_task_async.delay(task_id, create_pr)
+        # Extract credentials from request (optional)
+        gemini_key = request.data.get('gemini_key')
+        github_token = request.data.get('github_token')
+        
+        # Start Celery task with credentials
+        result = process_single_task_async.delay(
+            task_id, 
+            create_pr,
+            gemini_key,
+            github_token
+        )
         
         return Response({
             'task_id': task_id,
@@ -185,7 +194,7 @@ def process_all_tasks(request, session_id):
     Automatically process all tasks in a session.
     
     POST /api/v1/sessions/{session_id}/process-all/
-    Body: {"create_pr": true/false}
+    Body: {"create_pr": true/false, "gemini_key": "...", "github_token": "..."}
     
     Returns:
         {
@@ -208,14 +217,23 @@ def process_all_tasks(request, session_id):
         if isinstance(create_pr, str):
             create_pr = create_pr.lower() == 'true'
         
+        # Extract credentials from request (optional)
+        gemini_key = request.data.get('gemini_key')
+        github_token = request.data.get('github_token')
+        
         # Count tasks
         total_tasks = Task.objects.filter(
             repository=session.repository,
             status='pending'
         ).count()
         
-        # Start Celery task
-        result = process_all_tasks_async.delay(session_id, create_pr)
+        # Start Celery task with credentials
+        result = process_all_tasks_async.delay(
+            session_id, 
+            create_pr,
+            gemini_key,
+            github_token
+        )
         
         return Response({
             'session_id': session_id,
@@ -272,6 +290,76 @@ def get_task_detail(request, task_id):
                 'url': task.repository.repo_url
             }
         })
+        
+    except Task.DoesNotExist:
+        return Response({
+            'error': 'Task not found'
+        }, status=http_status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+def create_pr_for_task(request, task_id):
+    """
+    Create a PR for a task that already has a verified fix.
+    
+    POST /api/v1/tasks/{task_id}/create-pr/
+    
+    This endpoint ONLY creates a PR - it does NOT re-run verification.
+    Use this when a task already has fix_code and you just want to create the PR.
+    
+    Returns:
+        {
+            "task_id": int,
+            "pr_url": str,
+            "message": "PR created successfully"
+        }
+    """
+    from rest_framework import status as http_status
+    from apps.verification.services.verification_orchestrator import VerificationOrchestrator
+    
+    try:
+        task = Task.objects.select_related('repository').get(id=task_id)
+        
+        # Validate that task has a fix
+        if not task.fix_code:
+            return Response({
+                'error': 'Task does not have a fix yet. Run verification first.'
+            }, status=http_status.HTTP_400_BAD_REQUEST)
+        
+        # Validate that PR doesn't already exist
+        if task.pr_url:
+            return Response({
+                'error': 'PR already exists for this task',
+                'pr_url': task.pr_url
+            }, status=http_status.HTTP_400_BAD_REQUEST)
+        
+        # Extract credentials from request (optional)
+        gemini_key = request.data.get('gemini_key')
+        github_token = request.data.get('github_token')
+        
+        # Create orchestrator with credentials
+        orchestrator = VerificationOrchestrator(
+            gemini_key=gemini_key,
+            github_token=github_token
+        )
+        
+        # Create PR directly (skip verification)
+        try:
+            orchestrator._create_github_pr(task)
+            
+            # Refresh task from database to get updated pr_url
+            task.refresh_from_db()
+            
+            return Response({
+                'task_id': task_id,
+                'pr_url': task.pr_url,
+                'message': 'PR created successfully'
+            }, status=http_status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to create PR: {str(e)}'
+            }, status=http_status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     except Task.DoesNotExist:
         return Response({

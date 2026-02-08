@@ -29,12 +29,18 @@ class VerificationOrchestrator:
     
     MAX_RETRIES = 1  # Retry once if fix fails
     
-    def __init__(self):
-        """Initialize all service components."""
-        self.test_generator = TestGenerator()
-        self.fix_generator = FixGenerator()
+    def __init__(self, gemini_key: str = None, github_token: str = None):
+        """
+        Initialize all service components.
+        
+        Args:
+            gemini_key: Optional Gemini API key for fix/test generation.
+            github_token: Optional GitHub token for PR creation.
+        """
+        self.test_generator = TestGenerator(gemini_key=gemini_key)
+        self.fix_generator = FixGenerator(gemini_key=gemini_key)
         self.test_runner = TestRunner()
-        self.github_client = GithubAuthService()
+        self.github_client = GithubAuthService(github_token=github_token)
     
     def verify_and_fix_vulnerability(self, task: Task, create_pr: bool = False) -> bool:
         """
@@ -326,17 +332,49 @@ class VerificationOrchestrator:
     
     def _log(self, task: Task, message: str, level: str = "info"):
         """
-        Log a message to TaskLog.
+        Log a message to TaskLog and session logs.
         
         Args:
             task (Task): Task to log for.
             message (str): Log message.
             level (str): Log level (INFO, WARNING, ERROR).
         """
+        # Log to TaskLog
         TaskLog.objects.create(
             task=task,
-            message=f"[{level}] {message}"
+            message=f"[{level.upper()}] {message}"
         )
+        
+        # Also log to session if available
+        try:
+            from apps.analysis_session.models import AnalysisSession
+            from apps.tasklog.utils import create_session_log
+            from apps.tasklog.models import LogType
+            
+            # Find the session for this task's repository
+            session = AnalysisSession.objects.filter(
+                repository=task.repository,
+                status='running'
+            ).first()
+            
+            if session:
+                log_type_map = {
+                    'info': LogType.INFO,
+                    'warning': LogType.WARNING,
+                    'error': LogType.ERROR,
+                    'success': LogType.SUCCESS
+                }
+                log_type = log_type_map.get(level.lower(), LogType.INFO)
+                
+                create_session_log(
+                    session,
+                    f"[Task {task.id}] {message}",
+                    log_type
+                )
+        except Exception as e:
+            # Don't fail if session logging fails
+            print(f"Warning: Could not log to session: {e}")
+        
         print(f"Task {task.id} - {message}")
     
     def _create_github_pr(self, task):

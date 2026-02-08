@@ -74,6 +74,9 @@ def broadcast_progress_update(session):
                 'total_files': session.total_files,
                 'progress_percentage': round(session.progress_percentage(), 2),
                 'vulnerabilities_found': session.vulnerabilities_found,
+                'tests_created': session.tests_created or 0,
+                'fixes_generated': session.fixes_generated or 0,
+                'prs_created': session.prs_created or 0,
                 'current_file': getattr(session, 'current_file', ''),
                 'estimated_time_remaining_seconds': session.estimated_time_remaining(),
             }
@@ -100,6 +103,8 @@ def broadcast_analysis_complete(session):
                 'status': 'completed',
                 'vulnerabilities_found': session.vulnerabilities_found,
                 'tasks_created': session.task_created,
+                'tests_created': session.tests_created or 0,
+                'fixes_generated': session.fixes_generated or 0,
                 'prs_created': session.prs_created,
             }
         }

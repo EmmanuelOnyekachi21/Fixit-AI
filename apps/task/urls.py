@@ -12,4 +12,5 @@ urlpatterns = [
     path('<str:task_id>/status/', views.get_task_status, name='task_status'),
     path('<int:task_id>/verify-and-fix/', views.verify_and_fix, name='verify_and_fix'),
     path('<int:task_id>/generate-fix/', views.generate_fix, name='generate_fix'),
+    path('<int:task_id>/create-pr/', views.create_pr_for_task, name='create_pr_for_task'),
 ]

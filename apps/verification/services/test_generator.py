@@ -18,9 +18,14 @@ class TestGenerator:
     vulnerability is present, confirming its existence.
     """
 
-    def __init__(self):
-        """Initialize the TestGenerator with a GeminiClient."""
-        self.gemini = GeminiClient()
+    def __init__(self, gemini_key: str = None):
+        """
+        Initialize the TestGenerator with a GeminiClient.
+        
+        Args:
+            gemini_key: Optional Gemini API key. If not provided, uses settings.
+        """
+        self.gemini = GeminiClient(api_key=gemini_key)
 
     def generate_test(self, task: Task) -> str:
         """
