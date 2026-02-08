@@ -2,9 +2,12 @@ import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import { mockRepositories, mockTasks } from './data/mockData';
 
+// Use environment variable for API URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 const api: AxiosInstance = axios.create({
-    baseURL: 'http://localhost:8000/api/v1/',
-    timeout: 5000, // 5 second timeout
+    baseURL: `${API_BASE_URL}/api/v1/`,
+    timeout: 30000, // 30 second timeout for production
 });
 
 // Flag to check if backend is available

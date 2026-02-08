@@ -16,8 +16,9 @@ export default function AnalysisProgress() {
   const [isLoading, setIsLoading] = useState(true);
 
   // WebSocket connection for real-time updates
+  const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000';
   const wsUrl = id && id !== 'demo'
-    ? `ws://localhost:8000/ws/sessions/${id}/`
+    ? `${WS_BASE_URL}/ws/sessions/${id}/`
     : null;
 
   const { isConnected } = useWebSocket(wsUrl, {

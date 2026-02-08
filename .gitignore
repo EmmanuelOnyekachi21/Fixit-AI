@@ -2,4 +2,33 @@
 .venv
 __pycache__
 
+# Environment files (keep .example files)
 .env
+.env.local
+.env.production
+frontend/.env.production
+frontend/.env.local
+
+# Logs
+*.log
+backend.log
+celery.log
+
+# Static files
+staticfiles/
+frontend/dist/
+frontend/node_modules/
+
+# Database
+*.sqlite3
+db.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

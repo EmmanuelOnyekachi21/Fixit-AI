@@ -4,7 +4,7 @@ import { mockTasks } from '../data/mockData';
 import type { Task, Severity, TaskStatus } from '../types';
 import VulnerabilityDetailModal from '../components/VulnerabilityDetailModal';
 import FixReviewModal from '../components/FixReviewModal';
-import { getRepositoryTasks, generateFix, processAllTasks, getTaskDetail } from '../api';
+import { getRepositoryTasks, generateFix, processAllTasks, getTaskDetail, createPRForTask } from '../api';
 
 interface RepositoryGroup {
   repository_id: number;
@@ -34,7 +34,8 @@ export default function Vulnerabilities() {
       setIsLoading(true);
       try {
         // Get all sessions
-        const sessionsResponse = await fetch('http://localhost:8000/api/v1/sessions/');
+        const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+        const sessionsResponse = await fetch(`${API_BASE_URL}/api/v1/sessions/`);
         const sessionsData = await sessionsResponse.json();
         
         console.log('📊 Sessions data:', sessionsData);
@@ -49,7 +50,7 @@ export default function Vulnerabilities() {
             if (session.status === 'completed') {
               try {
                 // Get detailed session info to get repository_id
-                const sessionDetailResponse = await fetch(`http://localhost:8000/api/v1/sessions/${session.id}/status/`);
+                const sessionDetailResponse = await fetch(`${API_BASE_URL}/api/v1/sessions/${session.id}/status/`);
                 const sessionDetail = await sessionDetailResponse.json();
                 
                 console.log('📝 Session detail:', sessionDetail);
@@ -213,29 +214,71 @@ export default function Vulnerabilities() {
     try {
       setProcessingTasks(prev => new Set(prev).add(taskId));
       
-      const result = await generateFix(taskId, createPR);
+      // Get credentials if in real-time mode
+      const mode = localStorage.getItem('fixit_mode');
+      let credentials = {};
+      if (mode === 'real') {
+        const geminiKey = localStorage.getItem('gemini_key');
+        const githubToken = localStorage.getItem('github_token');
+        if (geminiKey && githubToken) {
+          credentials = { gemini_key: geminiKey, github_token: githubToken };
+        }
+      }
       
-      alert(
-        `✅ Verification workflow started!\n\n` +
-        `Task ID: ${taskId}\n` +
-        `Celery Task: ${result.celery_task_id}\n\n` +
-        `The system will:\n` +
-        `1. Generate test to verify vulnerability exists\n` +
-        `2. Generate fix for the vulnerability\n` +
-        `3. Verify the fix works\n` +
-        `${createPR ? '4. Create a PR with the verified fix\n' : ''}\n` +
-        `This may take a few minutes...`
-      );
+      const result = await generateFix(taskId, createPR, credentials);
       
-      // Optionally refresh the task list after a delay
+      // Poll for task completion
+      const checkTaskStatus = async () => {
+        try {
+          const taskDetail = await getTaskDetail(taskId);
+          
+          // Check if processing is complete
+          if (taskDetail.status === 'completed' || taskDetail.status === 'pr_created') {
+            clearInterval(pollInterval);
+            setProcessingTasks(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(taskId);
+              return newSet;
+            });
+            
+            alert(`✅ Success!\n\nTask ${taskId} processed successfully.${taskDetail.pr_url ? `\n\nPR created: ${taskDetail.pr_url}` : ''}`);
+            window.location.reload();
+          } else if (taskDetail.status === 'failed' || taskDetail.status === 'false_positive') {
+            clearInterval(pollInterval);
+            setProcessingTasks(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(taskId);
+              return newSet;
+            });
+            
+            const errorMsg = taskDetail.status === 'false_positive' 
+              ? 'Marked as false positive - vulnerability could not be confirmed'
+              : 'Processing failed - check if you have API quota remaining';
+            
+            alert(`⚠️ ${errorMsg}\n\nTask ID: ${taskId}\n\nPlease check your Gemini API quota at:\nhttps://ai.google.dev/gemini-api/docs/rate-limits`);
+            window.location.reload();
+          }
+        } catch (error) {
+          console.error('Error checking task status:', error);
+        }
+      };
+      
+      // Start polling every 3 seconds
+      const pollInterval = setInterval(checkTaskStatus, 3000);
+      
+      // Stop polling after 5 minutes (timeout)
       setTimeout(() => {
-        window.location.reload();
-      }, 5000);
+        clearInterval(pollInterval);
+        setProcessingTasks(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(taskId);
+          return newSet;
+        });
+      }, 300000);
       
     } catch (error: any) {
       console.error('Failed to generate fix:', error);
       alert(`❌ Failed to start verification:\n${error.message}`);
-    } finally {
       setProcessingTasks(prev => {
         const newSet = new Set(prev);
         newSet.delete(taskId);
@@ -252,6 +295,77 @@ export default function Vulnerabilities() {
     } catch (error: any) {
       console.error('Failed to load task details:', error);
       alert(`❌ Failed to load fix details:\n${error.message}`);
+    }
+  };
+
+  // Handler for creating PR only (when fix already exists)
+  const handleCreatePROnly = async (taskId: number) => {
+    const confirmed = confirm(
+      `Create Pull Request for this fix?\n\n` +
+      `This will create a PR on GitHub with the generated fix.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      setProcessingTasks(prev => new Set(prev).add(taskId));
+      
+      // Get credentials if in real-time mode
+      const mode = localStorage.getItem('fixit_mode');
+      let credentials = {};
+      if (mode === 'real') {
+        const geminiKey = localStorage.getItem('gemini_key');
+        const githubToken = localStorage.getItem('github_token');
+        if (geminiKey && githubToken) {
+          credentials = { gemini_key: geminiKey, github_token: githubToken };
+        }
+      }
+      
+      console.log('Creating PR for task:', taskId);
+      
+      // Call the dedicated create-pr endpoint (no verification)
+      const result = await createPRForTask(taskId, credentials);
+      
+      console.log('PR creation result:', result);
+      
+      // Success!
+      setProcessingTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
+      
+      if (result.pr_url) {
+        alert(`✅ PR Created!\n\n${result.pr_url}`);
+      } else {
+        alert(`✅ PR Created!\n\nCheck the Vulnerabilities page for the PR link.`);
+      }
+      
+      window.location.reload();
+      
+    } catch (error: any) {
+      console.error('Failed to create PR:', error);
+      console.error('Error details:', error.response?.data);
+      
+      // Check if PR was actually created despite the error
+      try {
+        const taskDetail = await getTaskDetail(taskId);
+        if (taskDetail.pr_url) {
+          // PR was created! Just show success
+          alert(`✅ PR Created!\n\n${taskDetail.pr_url}`);
+          window.location.reload();
+          return;
+        }
+      } catch (checkError) {
+        console.error('Error checking task:', checkError);
+      }
+      
+      alert(`❌ Failed to create PR:\n${error.message}`);
+      setProcessingTasks(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(taskId);
+        return newSet;
+      });
     }
   };
 
@@ -296,7 +410,18 @@ export default function Vulnerabilities() {
     try {
       setProcessingSessions(prev => new Set(prev).add(sessionId));
       
-      const result = await processAllTasks(sessionId, createPR);
+      // Get credentials if in real-time mode
+      const mode = localStorage.getItem('fixit_mode');
+      let credentials = {};
+      if (mode === 'real') {
+        const geminiKey = localStorage.getItem('gemini_key');
+        const githubToken = localStorage.getItem('github_token');
+        if (geminiKey && githubToken) {
+          credentials = { gemini_key: geminiKey, github_token: githubToken };
+        }
+      }
+      
+      const result = await processAllTasks(sessionId, createPR, credentials);
       
       alert(
         `✅ Verification workflow started!\n\n` +
@@ -565,13 +690,23 @@ export default function Vulnerabilities() {
                                 
                                 {/* Review Fix Button (if fix generated but no PR yet) */}
                                 {task.fix_code && !task.pr_url && (
-                                  <button
-                                    onClick={() => handleReviewFix(task.id)}
-                                    className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded transition-colors flex items-center gap-1"
-                                  >
-                                    <AlertTriangle className="h-3 w-3" />
-                                    Review Fix
-                                  </button>
+                                  <>
+                                    <button
+                                      onClick={() => handleReviewFix(task.id)}
+                                      className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-sm rounded transition-colors flex items-center gap-1"
+                                    >
+                                      <AlertTriangle className="h-3 w-3" />
+                                      Review Fix
+                                    </button>
+                                    <button
+                                      onClick={() => handleCreatePROnly(task.id)}
+                                      disabled={processingTasks.has(task.id)}
+                                      className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-1"
+                                    >
+                                      <Rocket className="h-3 w-3" />
+                                      {processingTasks.has(task.id) ? 'Creating PR...' : 'Create PR'}
+                                    </button>
+                                  </>
                                 )}
                                 
                                 {/* Status Indicators */}
