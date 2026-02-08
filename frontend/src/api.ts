@@ -104,14 +104,35 @@ export const resumeSession = async (sessionId: string) => {
 };
 
 // ============================================
+// CREDENTIALS API (NEW)
+// ============================================
+
+export const validateCredentials = async (geminiKey: string, githubToken: string) => {
+    try {
+        const response = await api.post('credentials/validate/', {
+            gemini_key: geminiKey,
+            github_token: githubToken
+        });
+        return response.data;
+    } catch (error: any) {
+        throw new Error(error.response?.data?.error || 'Failed to validate credentials');
+    }
+};
+
+// ============================================
 // REPOSITORY API
 // ============================================
 
-export const startAnalysis = async (repoUrl: string, createPrs: boolean = false) => {
+export const startAnalysis = async (
+    repoUrl: string, 
+    createPrs: boolean = false,
+    credentials?: { gemini_key: string; github_token: string }
+) => {
     try {
         const response = await api.post('repositories/', {
             repo_url: repoUrl,
-            create_prs: createPrs
+            create_prs: createPrs,
+            ...credentials  // Include credentials if provided
         });
         return response.data;
     } catch (error: any) {
@@ -193,10 +214,15 @@ export default api;
 // FIX GENERATION API (NEW)
 // ============================================
 
-export const generateFix = async (taskId: number, createPR: boolean = false) => {
+export const generateFix = async (
+    taskId: number, 
+    createPR: boolean = false,
+    credentials?: { gemini_key: string; github_token: string }
+) => {
     try {
         const response = await api.post(`tasks/${taskId}/generate-fix/`, {
-            create_pr: createPR
+            create_pr: createPR,
+            ...credentials  // Include credentials if provided
         });
         return response.data;
     } catch (error: any) {
@@ -204,10 +230,15 @@ export const generateFix = async (taskId: number, createPR: boolean = false) => 
     }
 };
 
-export const processAllTasks = async (sessionId: string, createPR: boolean = false) => {
+export const processAllTasks = async (
+    sessionId: string, 
+    createPR: boolean = false,
+    credentials?: { gemini_key: string; github_token: string }
+) => {
     try {
         const response = await api.post(`sessions/${sessionId}/process-all/`, {
-            create_pr: createPR
+            create_pr: createPR,
+            ...credentials  // Include credentials if provided
         });
         return response.data;
     } catch (error: any) {
@@ -221,5 +252,31 @@ export const getTaskDetail = async (taskId: number) => {
         return response.data;
     } catch (error: any) {
         throw new Error(error.response?.data?.error || 'Failed to get task details');
+    }
+};
+
+export const createPRForTask = async (
+    taskId: number,
+    credentials?: { gemini_key: string; github_token: string }
+) => {
+    try {
+        console.log('Calling create-pr endpoint for task:', taskId);
+        console.log('With credentials:', credentials ? 'provided' : 'none');
+        
+        // Increase timeout to 30 seconds for PR creation (GitHub API can be slow)
+        const response = await api.post(`tasks/${taskId}/create-pr/`, credentials || {}, {
+            timeout: 30000  // 30 seconds
+        });
+        
+        console.log('Create PR response:', response);
+        
+        return response.data;
+    } catch (error: any) {
+        console.error('Create PR error:', error);
+        console.error('Error response:', error.response);
+        console.error('Error status:', error.response?.status);
+        console.error('Error data:', error.response?.data);
+        
+        throw new Error(error.response?.data?.error || error.message || 'Failed to create PR');
     }
 };

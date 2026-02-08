@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Pause, X, FileCode, AlertTriangle, CheckCircle, GitPullRequest, Clock, Wifi, WifiOff } from 'lucide-react';
+import { Pause, X, FileCode, AlertTriangle, CheckCircle, GitPullRequest, Clock, Wifi, WifiOff, ArrowLeft } from 'lucide-react';
 import type { AnalysisSession, LogEntry } from '../types';
 import { createMockSession, generateMockLog } from '../data/mockData';
 import { getSessionStatus } from '../api';
@@ -9,10 +9,11 @@ import { useWebSocket } from '../hooks/useWebSocket';
 export default function AnalysisProgress() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [session, setSession] = useState<AnalysisSession>(createMockSession(Number(id) || 1));
+  const [session, setSession] = useState<AnalysisSession | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const [usingWebSocket, setUsingWebSocket] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // WebSocket connection for real-time updates
   const wsUrl = id && id !== 'demo'
@@ -39,17 +40,23 @@ export default function AnalysisProgress() {
 
         case 'session_update':
           // Progress update
-          setSession((prev) => ({
-            ...prev,
-            files_analyzed: message.data.files_analyzed || prev.files_analyzed,
-            total_files: message.data.total_files || prev.total_files,
-            progress_percentage: message.data.progress_percentage || prev.progress_percentage,
-            vulnerabilities_found: message.data.vulnerabilities_found || prev.vulnerabilities_found,
-            current_file: message.data.current_file || prev.current_file,
-            estimated_time_remaining: message.data.estimated_time_remaining_seconds !== null && message.data.estimated_time_remaining_seconds !== undefined 
-              ? message.data.estimated_time_remaining_seconds 
-              : prev.estimated_time_remaining,
-          }));
+          setSession((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              files_analyzed: message.data.files_analyzed || prev.files_analyzed,
+              total_files: message.data.total_files || prev.total_files,
+              progress_percentage: message.data.progress_percentage || prev.progress_percentage,
+              vulnerabilities_found: message.data.vulnerabilities_found || prev.vulnerabilities_found,
+              tests_created: message.data.tests_created || prev.tests_created || 0,
+              fixes_generated: message.data.fixes_generated || prev.fixes_generated || 0,
+              prs_created: message.data.prs_created || prev.prs_created || 0,
+              current_file: message.data.current_file || prev.current_file,
+              estimated_time_remaining: message.data.estimated_time_remaining_seconds !== null && message.data.estimated_time_remaining_seconds !== undefined 
+                ? message.data.estimated_time_remaining_seconds 
+                : prev.estimated_time_remaining,
+            };
+          });
           break;
 
         case 'new_log':
@@ -59,12 +66,15 @@ export default function AnalysisProgress() {
 
         case 'analysis_complete':
           // Analysis finished
-          setSession((prev) => ({
-            ...prev,
-            status: 'completed',
-            progress_percentage: 100,
-            vulnerabilities_found: message.data.vulnerabilities_found || prev.vulnerabilities_found,
-          }));
+          setSession((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              status: 'completed',
+              progress_percentage: 100,
+              vulnerabilities_found: message.data.vulnerabilities_found || prev.vulnerabilities_found,
+            };
+          });
           // Auto-redirect to vulnerabilities page after 2 seconds
           setTimeout(() => {
             navigate('/vulnerabilities');
@@ -72,8 +82,8 @@ export default function AnalysisProgress() {
           break;
 
         case 'error':
-          console.error('WebSocket error:', message.message);
-          if (message.message === 'Session not found') {
+          console.error('WebSocket error:', (message as any).message);
+          if ((message as any).message === 'Session not found') {
             alert('Session not found. Redirecting to dashboard.');
             navigate('/');
           }
@@ -83,6 +93,14 @@ export default function AnalysisProgress() {
   });
 
   const updateSessionFromData = (data: any) => {
+    console.log('📊 Updating session from data:', data);
+    
+    if (!data || !data.repository) {
+      console.error('❌ Invalid session data received:', data);
+      setIsLoading(false);
+      return;
+    }
+    
     const estimatedTime = data.estimated_time_remaining_seconds;
     
     setSession({
@@ -92,6 +110,9 @@ export default function AnalysisProgress() {
       total_files: data.progress.total_files,
       files_analyzed: data.progress.files_analyzed,
       vulnerabilities_found: data.results.vulnerabilities_found,
+      tests_created: data.results.tests_created || 0,
+      fixes_generated: data.results.fixes_generated || 0,
+      prs_created: data.results.prs_created || 0,
       progress_percentage: data.progress.percentage,
       estimated_time_remaining: estimatedTime !== null && estimatedTime !== undefined ? estimatedTime : 0,
       current_file: data.current_file || '',
@@ -101,11 +122,47 @@ export default function AnalysisProgress() {
     if (data.logs) {
       setLogs(data.logs);
     }
+    
+    setIsLoading(false);
+    console.log('✅ Session updated successfully');
   };
+
+  // Initialize session data on mount or when id changes
+  useEffect(() => {
+    if (!id) {
+      navigate('/');
+      return;
+    }
+
+    // Reset state when session ID changes
+    setIsLoading(true);
+    setLogs([]);
+    setUsingWebSocket(false);
+    
+    // For demo mode, create mock session
+    if (id === 'demo') {
+      setSession(createMockSession(1));
+      setIsLoading(false);
+      return;
+    }
+
+    // For real sessions, fetch initial data immediately
+    const fetchInitialData = async () => {
+      try {
+        const data = await getSessionStatus(id);
+        updateSessionFromData(data);
+      } catch (error) {
+        console.error('Failed to fetch initial session data:', error);
+        setIsLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [id, navigate]);
 
   // Fallback: HTTP polling when WebSocket unavailable
   useEffect(() => {
-    if (usingWebSocket || !id || id === 'demo') return;
+    if (!id || id === 'demo' || isLoading) return;
 
     const fetchStatus = async () => {
       try {
@@ -113,49 +170,84 @@ export default function AnalysisProgress() {
         updateSessionFromData(data);
       } catch (error) {
         console.error('Failed to fetch session status:', error);
+        setIsLoading(false);
       }
     };
 
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 3000);
-    return () => clearInterval(interval);
-  }, [id, usingWebSocket]);
+    // Only poll if WebSocket is not connected
+    if (!usingWebSocket) {
+      fetchStatus();
+      const interval = setInterval(fetchStatus, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [id, usingWebSocket, isLoading]);
 
-  // Fallback to mock simulation for demo mode
+  // Fallback to mock simulation for demo mode ONLY
   useEffect(() => {
-    if (id !== 'demo' || isPaused || session.status !== 'running') return;
+    if (id !== 'demo' || isPaused || !session || session.status !== 'running') return;
 
     const interval = setInterval(() => {
       setSession((prev) => {
-        if (prev.files_analyzed >= prev.total_files) {
-          return { ...prev, status: 'completed', progress_percentage: 100 };
+        if (!prev) return prev;
+        
+        // Increment by 3 files per interval to speed up demo (1.5 minutes total)
+        const filesPerInterval = 3;
+        const newFilesAnalyzed = Math.min(prev.files_analyzed + filesPerInterval, prev.total_files);
+        
+        // Calculate estimated time remaining based on remaining files
+        const remainingFiles = prev.total_files - newFilesAnalyzed;
+        const estimatedTimePerFile = 0.6; // 600ms per file
+        const newEstimatedTime = Math.max(0, remainingFiles * estimatedTimePerFile);
+        
+        // Check if analysis is complete
+        if (newFilesAnalyzed >= prev.total_files) {
+          const completedSession = { 
+            ...prev, 
+            status: 'completed' as const, 
+            progress_percentage: 100, 
+            files_analyzed: prev.total_files,
+            estimated_time_remaining: 0
+          };
+          
+          // Trigger redirect after a short delay
+          setTimeout(() => {
+            navigate('/vulnerabilities');
+          }, 1500);
+          
+          return completedSession;
         }
 
-        const newFilesAnalyzed = prev.files_analyzed + 1;
         const newProgress = Math.round((newFilesAnalyzed / prev.total_files) * 100);
         const newVulnerabilities = Math.random() > 0.7 ? prev.vulnerabilities_found + 1 : prev.vulnerabilities_found;
-        const newLog = generateMockLog(newFilesAnalyzed, prev.total_files);
+        
+        // Generate multiple logs for faster progression
+        const newLogs: LogEntry[] = [];
+        for (let i = 0; i < filesPerInterval; i++) {
+          newLogs.push(generateMockLog(prev.files_analyzed + i + 1, prev.total_files));
+        }
 
-        // Add log to logs state
-        setLogs((prevLogs) => [newLog, ...prevLogs].slice(0, 50));
+        // Add logs to logs state
+        setLogs((prevLogs) => [...newLogs, ...prevLogs].slice(0, 50));
 
         return {
           ...prev,
           files_analyzed: newFilesAnalyzed,
           progress_percentage: newProgress,
           vulnerabilities_found: newVulnerabilities,
-          estimated_time_remaining: Math.max(0, prev.estimated_time_remaining - 2),
+          estimated_time_remaining: newEstimatedTime,
           current_file: `app/module_${newFilesAnalyzed}/views.py`,
-          logs: [newLog, ...prev.logs].slice(0, 50),
+          logs: [...newLogs, ...prev.logs].slice(0, 50),
         };
       });
-    }, 2000);
+    }, 600); // 600ms interval instead of 2000ms
 
     return () => clearInterval(interval);
-  }, [isPaused, session.status, id]);
+  }, [isPaused, session?.status, id, navigate]);
 
   const handleCancel = () => {
-    setSession((prev) => ({ ...prev, status: 'failed' }));
+    if (session) {
+      setSession({ ...session, status: 'failed' });
+    }
     setTimeout(() => navigate('/'), 1000);
   };
 
@@ -164,6 +256,18 @@ export default function AnalysisProgress() {
     const secs = seconds % 60;
     return `${mins}m ${secs}s`;
   };
+
+  // Show loading state while fetching session data
+  if (isLoading || !session) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -199,6 +303,14 @@ export default function AnalysisProgress() {
           </div>
         </div>
         <div className="flex gap-3">
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            title="Analysis will continue running in the background"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Run in Background
+          </button>
           <button
             onClick={() => setIsPaused(!isPaused)}
             disabled={session.status !== 'running'}
@@ -280,8 +392,8 @@ export default function AnalysisProgress() {
               <CheckCircle className="h-6 w-6 text-green-500" />
             </div>
             <div>
-              <p className="text-sm text-gray-400">Tests Passed</p>
-              <p className="text-2xl font-bold text-white">{Math.floor(session.vulnerabilities_found * 0.8)}</p>
+              <p className="text-sm text-gray-400">Tests Created</p>
+              <p className="text-2xl font-bold text-white">{session.tests_created || 0}</p>
             </div>
           </div>
         </div>
@@ -293,7 +405,7 @@ export default function AnalysisProgress() {
             </div>
             <div>
               <p className="text-sm text-gray-400">PRs Created</p>
-              <p className="text-2xl font-bold text-white">{Math.floor(session.vulnerabilities_found * 0.6)}</p>
+              <p className="text-2xl font-bold text-white">{session.prs_created || 0}</p>
             </div>
           </div>
         </div>

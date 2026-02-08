@@ -1,7 +1,10 @@
-import { useState } from 'react';
-import { Github, CheckCircle, XCircle, AlertTriangle, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Github, CheckCircle, XCircle, AlertTriangle, Save, Zap, Loader } from 'lucide-react';
+import { validateCredentials } from '../api';
 
 export default function Settings() {
+  const [mode, setMode] = useState<'demo' | 'real' | null>(null);
+  const [geminiKey, setGeminiKey] = useState('');
   const [githubToken, setGithubToken] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [username, setUsername] = useState('');
@@ -10,6 +13,59 @@ export default function Settings() {
   const [autoCreatePRs, setAutoCreatePRs] = useState(true);
   const [checkpointInterval, setCheckpointInterval] = useState(10);
   const [saved, setSaved] = useState(false);
+  
+  // Validation state
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationStatus, setValidationStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
+  const [validationMessage, setValidationMessage] = useState('');
+
+  useEffect(() => {
+    const savedMode = localStorage.getItem('fixit_mode') as 'demo' | 'real' | null;
+    setMode(savedMode);
+    
+    // Load saved credentials if they exist
+    const savedGeminiKey = localStorage.getItem('gemini_key');
+    const savedGithubToken = localStorage.getItem('github_token');
+    if (savedGeminiKey) setGeminiKey(savedGeminiKey);
+    if (savedGithubToken) setGithubToken(savedGithubToken);
+    
+    // If both exist, mark as valid
+    if (savedGeminiKey && savedGithubToken) {
+      setValidationStatus('valid');
+      setValidationMessage('✓ Credentials loaded from previous session');
+    }
+  }, []);
+
+  const handleValidateCredentials = async () => {
+    if (!geminiKey.trim() || !githubToken.trim()) {
+      setValidationStatus('invalid');
+      setValidationMessage('✗ Please enter both API keys');
+      return;
+    }
+
+    setIsValidating(true);
+    setValidationStatus('idle');
+    
+    try {
+      const result = await validateCredentials(geminiKey, githubToken);
+      
+      if (result.valid) {
+        setValidationStatus('valid');
+        setValidationMessage('✓ Credentials validated successfully!');
+        // Store in localStorage
+        localStorage.setItem('gemini_key', geminiKey);
+        localStorage.setItem('github_token', githubToken);
+      } else {
+        setValidationStatus('invalid');
+        setValidationMessage(`✗ ${result.error || 'Invalid credentials'}`);
+      }
+    } catch (error: any) {
+      setValidationStatus('invalid');
+      setValidationMessage(`✗ ${error.message || 'Failed to validate credentials'}`);
+    } finally {
+      setIsValidating(false);
+    }
+  };
 
   const handleTestConnection = async () => {
     setIsTesting(true);
@@ -27,6 +83,15 @@ export default function Settings() {
   };
 
   const handleSaveSettings = () => {
+    if (mode === 'real' && (!geminiKey.trim() || !githubToken.trim())) {
+      alert('Please provide both Gemini API key and GitHub token for real-time mode');
+      return;
+    }
+    
+    // Save to localStorage
+    if (geminiKey) localStorage.setItem('gemini_api_key', geminiKey);
+    if (githubToken) localStorage.setItem('github_token', githubToken);
+    
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -57,17 +122,53 @@ export default function Settings() {
         <p className="text-gray-400 mt-1">Configure FixIt security agent</p>
       </div>
 
-      {/* GitHub Authentication */}
-      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 shadow-xl">
-        <div className="flex items-center gap-3 mb-6">
-          <Github className="h-6 w-6 text-blue-500" />
-          <h2 className="text-xl font-semibold text-white">GitHub Authentication</h2>
+      {/* Real-Time Mode Setup Banner */}
+      {mode === 'real' && (
+        <div className="bg-gradient-to-r from-purple-600/20 to-pink-600/20 border border-purple-500/50 rounded-lg p-6 flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <Zap className="h-6 w-6 text-purple-400 mt-1" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-purple-300 mb-2">🚀 Complete Your Setup</h3>
+            <p className="text-gray-300 mb-4">
+              You're in Real-Time Mode! To get started, you need to provide your API keys below. This is a one-time setup.
+            </p>
+            <div className="space-y-2 text-sm text-gray-400">
+              <p>✓ Get your <span className="text-blue-400 font-semibold">Gemini API Key</span> from: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">aistudio.google.com/app/apikey</a></p>
+              <p>✓ Get your <span className="text-blue-400 font-semibold">GitHub Token</span> from: <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">github.com/settings/tokens</a></p>
+              <p className="text-xs text-gray-500 mt-3">GitHub token needs: <code className="bg-gray-800 px-2 py-1 rounded">repo</code> and <code className="bg-gray-800 px-2 py-1 rounded">workflow</code> scopes</p>
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* API Keys Section */}
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 shadow-xl">
+        <h2 className="text-xl font-semibold text-white mb-6">API Keys</h2>
 
         <div className="space-y-4">
+          {/* Gemini API Key */}
+          <div>
+            <label htmlFor="gemini-key" className="block text-sm font-medium text-gray-300 mb-2">
+              Gemini API Key
+            </label>
+            <input
+              id="gemini-key"
+              type="password"
+              value={geminiKey}
+              onChange={(e) => setGeminiKey(e.target.value)}
+              placeholder="AIzaSy..."
+              className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              Get your key at: <span className="text-blue-400">aistudio.google.com/app/apikey</span>
+            </p>
+          </div>
+
+          {/* GitHub Token */}
           <div>
             <label htmlFor="github-token" className="block text-sm font-medium text-gray-300 mb-2">
-              Personal Access Token
+              GitHub Personal Access Token
             </label>
             <input
               id="github-token"
@@ -78,40 +179,51 @@ export default function Settings() {
               className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
             <p className="text-xs text-gray-500 mt-2">
-              Required scopes: repo, workflow, write:packages
+              Get your token at: <span className="text-blue-400">github.com/settings/tokens</span> (requires: repo, workflow)
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <button
-              onClick={handleTestConnection}
-              disabled={isTesting || !githubToken.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              onClick={handleValidateCredentials}
+              disabled={isValidating || !geminiKey.trim() || !githubToken.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
             >
-              {isTesting ? (
+              {isValidating ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Testing...
+                  <Loader className="h-4 w-4 animate-spin" />
+                  Validating...
                 </>
               ) : (
-                'Test Connection'
+                <>
+                  <CheckCircle className="h-4 w-4" />
+                  Validate Credentials
+                </>
               )}
             </button>
 
-            {isConnected && (
+            {validationStatus === 'valid' && (
               <div className="flex items-center gap-2 text-green-400">
                 <CheckCircle className="h-5 w-5" />
-                <span className="text-sm">Connected as {username}</span>
+                <span className="text-sm">{validationMessage}</span>
               </div>
             )}
 
-            {!isConnected && githubToken && !isTesting && (
+            {validationStatus === 'invalid' && (
               <div className="flex items-center gap-2 text-red-400">
                 <XCircle className="h-5 w-5" />
-                <span className="text-sm">Not connected</span>
+                <span className="text-sm">{validationMessage}</span>
               </div>
             )}
           </div>
+          
+          {validationStatus === 'valid' && (
+            <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+              <p className="text-sm text-green-300">
+                ✓ Your credentials have been validated and saved. You can now analyze real repositories!
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -194,6 +306,18 @@ export default function Settings() {
               <CheckCircle className="h-5 w-5" />
               <span className="text-sm">Settings saved successfully</span>
             </div>
+          )}
+
+          {mode === 'real' && validationStatus === 'valid' && (
+            <button
+              onClick={() => {
+                window.location.href = '/';
+              }}
+              className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors w-full justify-center"
+            >
+              <Zap className="h-5 w-5" />
+              Continue to Dashboard
+            </button>
           )}
         </div>
       </div>

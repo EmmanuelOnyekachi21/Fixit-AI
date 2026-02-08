@@ -18,7 +18,18 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<any>({});
   const [isLoading, setIsLoading] = useState(true);
   const [usingMockData, setUsingMockData] = useState(false);
+  const [mode, setMode] = useState<'demo' | 'real' | null>(null);
 
+  useEffect(() => {
+    // Get mode from localStorage
+    const savedMode = localStorage.getItem('fixit_mode') as 'demo' | 'real' | null;
+    setMode(savedMode);
+
+    // Set placeholder URL for demo mode
+    if (savedMode === 'demo') {
+      setRepoUrl('https://github.com/danielhonson404/vulnerable-app.git');
+    }
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -39,12 +50,37 @@ export default function Dashboard() {
   }, [])
 
   const handleAnalyze = async () => {
+    // Check if in real-time mode and keys are missing
+    if (mode === 'real') {
+      const geminiKey = localStorage.getItem('gemini_key');
+      const githubToken = localStorage.getItem('github_token');
+      
+      if (!geminiKey || !githubToken) {
+        alert('Please configure your API keys in Settings first');
+        window.location.href = '/settings';
+        return;
+      }
+    }
+
     if (!repoUrl.trim()) return;
     
     setIsAnalyzing(true);
     
     try {
-      const result = await startAnalysis(repoUrl, autoCreatePRs);
+      // In demo mode, just navigate to demo analysis
+      if (mode === 'demo') {
+        navigate('/analysis/demo');
+        return;
+      }
+
+      // In real-time mode, call the API with credentials
+      const geminiKey = localStorage.getItem('gemini_key');
+      const githubToken = localStorage.getItem('github_token');
+      
+      const result = await startAnalysis(repoUrl, autoCreatePRs, {
+        gemini_key: geminiKey!,
+        github_token: githubToken!
+      });
       
       // Navigate to analysis progress page with session ID
       if (result.session_id) {
@@ -140,7 +176,20 @@ export default function Dashboard() {
         <div className="flex items-center gap-3 mb-6">
           <Github className="h-6 w-6 text-blue-500" />
           <h2 className="text-xl font-semibold text-white">Analyze Repository</h2>
+          {mode === 'real' && (
+            <span className="ml-auto text-xs px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full">
+              Real-Time Mode
+            </span>
+          )}
         </div>
+
+        {mode === 'real' && (
+          <div className="mb-6 p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+            <p className="text-sm text-purple-300">
+              ✓ API keys configured. Ready to analyze real repositories.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-4">
           <div>
@@ -152,9 +201,14 @@ export default function Dashboard() {
               type="text"
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
-              placeholder="https://github.com/owner/repository"
+              placeholder={mode === 'demo' ? 'https://github.com/danielhonson404/vulnerable-app.git' : 'https://github.com/owner/repository'}
               className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
+            {mode === 'demo' && (
+              <p className="text-xs text-gray-400 mt-2">
+                💡 Demo mode: Pre-filled with a sample vulnerable repository
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-3">

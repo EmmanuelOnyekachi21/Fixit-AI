@@ -41,6 +41,9 @@ export interface AnalysisSession {
   total_files: number;
   files_analyzed: number;
   vulnerabilities_found: number;
+  tests_created?: number;
+  fixes_generated?: number;
+  prs_created?: number;
   progress_percentage: number;
   estimated_time_remaining: number;
   current_file?: string;
