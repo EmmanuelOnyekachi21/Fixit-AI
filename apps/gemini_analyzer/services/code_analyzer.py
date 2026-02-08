@@ -28,9 +28,14 @@ logger = logging.getLogger(__name__)
 class CodeAnalyzer:
     """Orchestrates code security analysis using Gemini."""
 
-    def __init__(self):
-        """Initialize the code analyzer with Gemini client and parser."""
-        self.gemini_client = GeminiClient()
+    def __init__(self, gemini_key: str = None):
+        """
+        Initialize the code analyzer with Gemini client and parser.
+        
+        Args:
+            gemini_key: Optional Gemini API key. If not provided, uses settings.
+        """
+        self.gemini_client = GeminiClient(api_key=gemini_key)
         self.parser = ResponseParser()
 
     def analyze_file(

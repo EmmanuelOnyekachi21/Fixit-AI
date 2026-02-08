@@ -31,10 +31,18 @@ class AnalyzerService:
     to identify security vulnerabilities.
     """
 
-    def __init__(self):
-        """Initialize the analyzer service with required clients."""
-        self.code_analyzer = CodeAnalyzer()
-        self.github_service = GitHubClient()
+    def __init__(self, gemini_key: str = None, github_token: str = None):
+        """
+        Initialize the analyzer service with required clients.
+        
+        Args:
+            gemini_key: Optional Gemini API key. If not provided, uses settings.
+            github_token: Optional GitHub token. If not provided, uses unauthenticated requests.
+        """
+        self.code_analyzer = CodeAnalyzer(gemini_key=gemini_key)
+        self.github_service = GitHubClient(github_token=github_token)
+        self.gemini_key = gemini_key
+        self.github_token = github_token
 
     def analyze_repository(self, repository_id: int) -> List[Task]:
         """
@@ -313,14 +321,89 @@ class AnalyzerService:
                 if tasks:
                     print(f"    ✓ Found {len(tasks)} vulnerabilities")
                     # Update vulnerability count in real-time
-                    session.vulnerabilities_found = len(all_task)
+                    session.vulnerabilities_found += len(tasks)
+                    session.save()
+                    
                     # Log: Found vulnerabilities
                     for task in tasks:
                         create_session_log(
                             session,
-                            f"⚠️  Found {task.vulnerability_type} in {filepath}",
+                            f"⚠️  Found {task.vulnerability_type} in {filepath} (line {task.line_number})",
                             LogType.WARNING
                         )
+                    
+                    # AGENTIC AI: Immediately process each vulnerability
+                    from apps.verification.services.verification_orchestrator import VerificationOrchestrator
+                    
+                    orchestrator = VerificationOrchestrator(
+                        gemini_key=self.gemini_key,
+                        github_token=self.github_token
+                    )
+                    
+                    for task in tasks:
+                        try:
+                            # Log: Starting verification
+                            create_session_log(
+                                session,
+                                f"🧪 Verifying {task.vulnerability_type} in {filepath}...",
+                                LogType.INFO
+                            )
+                            
+                            # Run the complete verify-first workflow
+                            success = orchestrator.verify_and_fix_vulnerability(
+                                task,
+                                create_pr=session.create_prs
+                            )
+                            
+                            if success:
+                                # Update session counters
+                                if task.test_code:
+                                    session.tests_created = (session.tests_created or 0) + 1
+                                if task.fix_code:
+                                    session.fixes_generated = (session.fixes_generated or 0) + 1
+                                if task.pr_url:
+                                    session.prs_created += 1
+                                session.save()
+                                
+                                # Log success
+                                if task.pr_url:
+                                    create_session_log(
+                                        session,
+                                        f"✅ Fixed & PR created for {task.vulnerability_type} in {filepath}",
+                                        LogType.SUCCESS
+                                    )
+                                else:
+                                    create_session_log(
+                                        session,
+                                        f"✅ Fixed {task.vulnerability_type} in {filepath}",
+                                        LogType.SUCCESS
+                                    )
+                            else:
+                                # Log failure or false positive
+                                if task.status == 'false_positive':
+                                    create_session_log(
+                                        session,
+                                        f"ℹ️  {task.vulnerability_type} in {filepath} marked as false positive",
+                                        LogType.INFO
+                                    )
+                                else:
+                                    create_session_log(
+                                        session,
+                                        f"⚠️  Failed to fix {task.vulnerability_type} in {filepath}",
+                                        LogType.WARNING
+                                    )
+                            
+                            # Broadcast progress after each task
+                            broadcast_progress_update(session)
+                            
+                        except Exception as e:
+                            print(f"    ✗ Error processing task {task.id}: {e}")
+                            create_session_log(
+                                session,
+                                f"✗ Error processing {task.vulnerability_type}: {str(e)}",
+                                LogType.ERROR
+                            )
+                            continue
                 else:
                     print("    ✓ No vulnerabilities found")
                     # Log: File clean
@@ -348,6 +431,9 @@ class AnalyzerService:
                         files_processed=processed_files.copy(),
                         state_data={
                             'task_created': len(all_task),
+                            'tests_created': session.tests_created or 0,
+                            'fixes_generated': session.fixes_generated or 0,
+                            'prs_created': session.prs_created,
                             'timestamp': timezone.now().isoformat()
                         }
                     )

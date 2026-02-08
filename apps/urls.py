@@ -18,6 +18,7 @@ Including another URLconf
 from django.urls import path, include
 
 urlpatterns = [
+    path('', include('apps.core.urls')),  # Core endpoints (credentials, etc.)
     path('auth/', include('apps.github_integration.urls')),
     path('repositories/', include('apps.repository.urls')),
     path('tasks/', include('apps.task.urls')),

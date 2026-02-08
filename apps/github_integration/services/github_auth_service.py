@@ -15,6 +15,16 @@ class GithubAuthService:
     """
     Handles Github Authentication and token management.
     """
+    
+    def __init__(self, github_token: str = None):
+        """
+        Initialize GithubAuthService.
+        
+        Args:
+            github_token: Optional GitHub token. If not provided, uses settings.GITHUB_BOT_TOKEN.
+        """
+        self.github_token = github_token
+    
     def validate_token(self, token: str) -> dict:
         """
         Validate Github token and return user info.
@@ -97,7 +107,7 @@ class GithubAuthService:
         
         Args:
             username (str, optional): Specific bot username.
-                If None, uses token from settings.
+                If None, uses token from instance or settings.
         
         Returns:
             Github: Authenticated  Github client.
@@ -106,13 +116,13 @@ class GithubAuthService:
             ValueError: If no authentication found or token missing.
         """
 
-        # For hackathon: Use token from .env
-        token = getattr(settings, 'GITHUB_BOT_TOKEN', None)
+        # Use instance token if provided, otherwise fall back to settings
+        token = self.github_token or getattr(settings, 'GITHUB_BOT_TOKEN', None)
 
         if not token:
             raise ValueError(
-                "GITHUB_BOT_TOKEN not found in settings. "
-                "Please add it to your .env file."
+                "GITHUB_BOT_TOKEN not found in settings and no token provided. "
+                "Please add it to your .env file or provide via API."
             )
         
         # Verify auth record exists (optional check)

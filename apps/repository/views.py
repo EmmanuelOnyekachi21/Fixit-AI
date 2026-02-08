@@ -49,6 +49,10 @@ def create_repository(request):
 
         # Get options
         create_prs = request.data.get('create_prs', False)
+        
+        # Extract credentials from request (optional)
+        gemini_key = request.data.get('gemini_key')
+        github_token = request.data.get('github_token')
 
         # Create session first
         import uuid
@@ -63,11 +67,13 @@ def create_repository(request):
             create_prs=create_prs
         )
 
-        # Start the async analysis with the session_id
+        # Start the async analysis with the session_id and credentials
         task = analyze_repository_async.delay(
             repository_id=repository.id,
             session_id=str(session.session_id),
-            create_pr=create_prs
+            create_pr=create_prs,
+            gemini_key=gemini_key,
+            github_token=github_token
         )
 
         return Response({

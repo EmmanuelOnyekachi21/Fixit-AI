@@ -24,18 +24,23 @@ from apps.gemini_analyzer.prompts.security_analysis import (
 class GeminiClient:
     """Client for interacting with Google's Gemini API."""
 
-    def __init__(self):
+    def __init__(self, api_key: str = None):
         """
         Initialize the Gemini client.
 
+        Args:
+            api_key: Optional Gemini API key. If not provided, uses settings.GEMINI_API_KEY.
+
         Raises:
-            ValueError: If GEMINI_API_KEY is not found in settings.
+            ValueError: If no API key is provided and GEMINI_API_KEY is not found in settings.
         """
-        # Ensure api_key exists
-        api_key = getattr(settings, "GEMINI_API_KEY", None)
+        # Use provided key or fall back to settings
+        if api_key is None:
+            api_key = getattr(settings, "GEMINI_API_KEY", None)
+        
         if api_key is None:
             raise ValueError(
-                "GEMINI_API_KEY not found in settings or .env"
+                "GEMINI_API_KEY not found in settings or .env, and no api_key provided"
             )
 
         # create client object

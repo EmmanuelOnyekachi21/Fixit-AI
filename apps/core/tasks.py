@@ -37,7 +37,9 @@ def analyze_repository_async(
     self,
     repository_id: int,
     session_id: str = None,
-    create_pr: bool = False
+    create_pr: bool = False,
+    gemini_key: str = None,
+    github_token: str = None
 ):
     """
     Asynchronous repository analysis with progress tracking.
@@ -49,6 +51,8 @@ def analyze_repository_async(
         repository_id: ID of repository to analyze.
         session_id: Optional existing session to resume.
         create_pr: Whether to create PRs for verified fixes.
+        gemini_key: Optional Gemini API key for analysis.
+        github_token: Optional GitHub token for authentication.
 
     Returns:
         dict: Session ID, status, and results.
@@ -77,8 +81,8 @@ def analyze_repository_async(
             )
             print(f"Created new session {session.session_id}")
 
-        # Run analysis
-        analyzer = AnalyzerService()
+        # Run analysis with credentials
+        analyzer = AnalyzerService(gemini_key=gemini_key, github_token=github_token)
         results = analyzer.analyze_with_checkpoints(
             repository=repo,
             session=session,
@@ -167,6 +171,8 @@ def get_session_status_data(session_id):
         'results': {
             'vulnerabilities_found': session.vulnerabilities_found,
             'tasks_created': session.task_created,
+            'tests_created': session.tests_created or 0,
+            'fixes_generated': session.fixes_generated or 0,
             'prs_created': session.prs_created,
         },
         'timestamps': {
@@ -180,7 +186,13 @@ def get_session_status_data(session_id):
 
 
 @shared_task(bind=True)
-def process_single_task_async(self, task_id: int, create_pr: bool = False):
+def process_single_task_async(
+    self, 
+    task_id: int, 
+    create_pr: bool = False,
+    gemini_key: str = None,
+    github_token: str = None
+):
     """
     Process a single vulnerability task using the VerificationOrchestrator.
     
@@ -195,6 +207,8 @@ def process_single_task_async(self, task_id: int, create_pr: bool = False):
     Args:
         task_id: ID of the Task to process
         create_pr: Whether to create a PR after verification
+        gemini_key: Optional Gemini API key for fix/test generation
+        github_token: Optional GitHub token for PR creation
     
     Returns:
         dict: Processing results
@@ -213,8 +227,8 @@ def process_single_task_async(self, task_id: int, create_pr: bool = False):
         
         logger.info(f"Processing task {task_id}: {task.vulnerability_type} in {task.file_path}")
         
-        # Use the VerificationOrchestrator for the complete workflow
-        orchestrator = VerificationOrchestrator()
+        # Use the VerificationOrchestrator for the complete workflow with credentials
+        orchestrator = VerificationOrchestrator(gemini_key=gemini_key, github_token=github_token)
         success = orchestrator.verify_and_fix_vulnerability(task, create_pr=create_pr)
         
         if success:
@@ -262,13 +276,21 @@ def process_single_task_async(self, task_id: int, create_pr: bool = False):
 
 
 @shared_task(bind=True)
-def process_all_tasks_async(self, session_id: str, create_pr: bool = False):
+def process_all_tasks_async(
+    self, 
+    session_id: str, 
+    create_pr: bool = False,
+    gemini_key: str = None,
+    github_token: str = None
+):
     """
     Process all tasks in a session automatically.
     
     Args:
         session_id: UUID of the AnalysisSession
         create_pr: Whether to create PRs for all tasks
+        gemini_key: Optional Gemini API key for fix/test generation
+        github_token: Optional GitHub token for PR creation
     
     Returns:
         dict: Processing results
@@ -295,8 +317,13 @@ def process_all_tasks_async(self, session_id: str, create_pr: bool = False):
         
         for task in tasks:
             try:
-                # Process each task
-                result = process_single_task_async.delay(task.id, create_pr)
+                # Process each task with credentials
+                result = process_single_task_async.delay(
+                    task.id, 
+                    create_pr,
+                    gemini_key,
+                    github_token
+                )
                 results.append({
                     'task_id': task.id,
                     'celery_task_id': result.id,

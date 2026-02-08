@@ -55,6 +55,8 @@ class AnalysisSession(models.Model):
     # Results
     vulnerabilities_found = models.IntegerField(default=0)
     task_created = models.IntegerField(default=0)
+    tests_created = models.IntegerField(default=0, help_text="Number of tests generated")
+    fixes_generated = models.IntegerField(default=0, help_text="Number of fixes generated")
     prs_created = models.IntegerField(default=0)
 
     # Timestamps

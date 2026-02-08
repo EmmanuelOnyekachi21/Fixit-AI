@@ -120,13 +120,39 @@ class SessionProgressConsumer(AsyncWebsocketConsumer):
         Retrieve current session status from the database.
         """
         try:
-            session = AnalysisSession.objects.get(session_id=self.session_id)
+            session = AnalysisSession.objects.select_related('repository').get(session_id=self.session_id)
+            
+            # Get recent logs
+            recent_logs = session.logs.all()[:50]
+            
             return {
                 'session_id': str(session.session_id),
+                'repository': {
+                    'id': session.repository.id,
+                    'name': session.repository.repo_name,
+                    'url': session.repository.repo_url,
+                },
                 'status': session.status,
-                'files_analyzed': session.files_analyzed,
-                'total_files': session.total_files,
-                'vulnerabilities_found': session.vulnerabilities_found,
+                'progress': {
+                    'total_files': session.total_files,
+                    'files_analyzed': session.files_analyzed,
+                    'files_failed': session.files_failed,
+                    'percentage': round(session.progress_percentage(), 2),
+                },
+                'results': {
+                    'vulnerabilities_found': session.vulnerabilities_found,
+                    'tasks_created': session.task_created,
+                    'tests_created': session.tests_created or 0,
+                    'fixes_generated': session.fixes_generated or 0,
+                    'prs_created': session.prs_created or 0,
+                },
+                'timestamps': {
+                    'started_at': session.started_at.isoformat() if session.started_at else None,
+                    'completed_at': session.completed_at.isoformat() if session.completed_at else None,
+                    'last_checkpoint_at': session.last_checkpoint_at.isoformat() if session.last_checkpoint_at else None,
+                },
+                'logs': [log.to_dict() for log in recent_logs],
+                'estimated_time_remaining_seconds': session.estimated_time_remaining() if session.status == 'running' else None,
             }
         except AnalysisSession.DoesNotExist:
             return None

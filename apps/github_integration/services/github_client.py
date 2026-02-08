@@ -29,11 +29,24 @@ class GitHubClient:
     # Fetch 50 candidates (stays within 60 req/hour limit)
     CANDIDATE_MULTIPLIER = 2
 
-    def __init__(self):
-        """Initialize the GitHub client with API endpoints."""
+    def __init__(self, github_token: str = None):
+        """
+        Initialize the GitHub client with API endpoints.
+        
+        Args:
+            github_token: Optional GitHub personal access token for authentication.
+                         If not provided, requests will be unauthenticated (lower rate limits).
+        """
         self.base_url = "https://api.github.com"
         self.raw_base = "https://raw.githubusercontent.com"
         self.session = requests.Session()
+        
+        # Add authentication if token provided
+        if github_token:
+            self.session.headers.update({
+                'Authorization': f'token {github_token}'
+            })
+        
         self.heuristic_analyzer = HeuristicAnalyzer()
         self.prioritizer = FilePrioritizer()
 
