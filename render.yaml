@@ -70,6 +70,7 @@ services:
     plan: free
     region: oregon
     maxmemoryPolicy: allkeys-lru
+    ipAllowList: []  # Empty list allows connections from all Render services in your account
 
 databases:
   - name: fixit-db
