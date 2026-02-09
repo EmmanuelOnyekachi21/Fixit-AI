@@ -77,7 +77,9 @@ if os.environ.get('CUSTOM_DOMAIN'):
     CSRF_TRUSTED_ORIGINS.append(f"https://{os.environ.get('CUSTOM_DOMAIN')}")
 
 # Security settings
-SECURE_SSL_REDIRECT = not DEBUG
+# Fly.io handles SSL termination, so we don't need Django to redirect
+SECURE_SSL_REDIRECT = False
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_BROWSER_XSS_FILTER = True
