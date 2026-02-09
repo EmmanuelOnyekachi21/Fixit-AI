@@ -33,14 +33,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project
 COPY . .
 
+# Set environment for collectstatic
+ENV SECRET_KEY="temp-build-key-for-collectstatic"
+ENV DATABASE_URL="sqlite:///tmp/db.sqlite3"
+
 # Create staticfiles directory
 RUN mkdir -p staticfiles
 
-# Collect static files (with fallback)
-RUN python manage.py collectstatic --no-input --clear || \
-    (echo "Static files collection failed, using default settings" && \
-     mkdir -p staticfiles/admin && \
-     echo "Static files will be served from Django")
+# Collect static files
+RUN python manage.py collectstatic --no-input --clear
+
+# Remove temp database
+RUN rm -f /tmp/db.sqlite3
 
 # Expose port
 EXPOSE 8080
