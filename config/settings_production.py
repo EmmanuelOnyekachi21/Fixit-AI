@@ -15,6 +15,7 @@ DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 ALLOWED_HOSTS = [
     '.onrender.com',  # Render backend
     '.vercel.app',    # Vercel frontend
+    '.fly.dev',       # Fly.io backend
     'localhost',
     '127.0.0.1',
 ]
@@ -68,7 +69,9 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = [
     'https://*.onrender.com',
     'https://*.vercel.app',
+    'https://*.fly.dev',
 ]
+
 
 if os.environ.get('CUSTOM_DOMAIN'):
     CSRF_TRUSTED_ORIGINS.append(f"https://{os.environ.get('CUSTOM_DOMAIN')}")
