@@ -34,10 +34,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Set environment for collectstatic
-ENV SECRET_KEY="temp-build-key-for-collectstatic" \
+ENV DJANGO_SETTINGS_MODULE="config.settings_production" \
+    SECRET_KEY="temp-build-key-for-collectstatic" \
     DATABASE_URL="sqlite:///tmp/db.sqlite3" \
     GEMINI_API_KEY="temp-key" \
-    GITHUB_BOT_TOKEN="temp-token"
+    GITHUB_BOT_TOKEN="temp-token" \
+    DEBUG="False"
 
 # Create staticfiles directory
 RUN mkdir -p staticfiles
