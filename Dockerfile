@@ -34,8 +34,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Set environment for collectstatic
-ENV SECRET_KEY="temp-build-key-for-collectstatic"
-ENV DATABASE_URL="sqlite:///tmp/db.sqlite3"
+ENV SECRET_KEY="temp-build-key-for-collectstatic" \
+    DATABASE_URL="sqlite:///tmp/db.sqlite3" \
+    GEMINI_API_KEY="temp-key" \
+    GITHUB_BOT_TOKEN="temp-token"
 
 # Create staticfiles directory
 RUN mkdir -p staticfiles
