@@ -157,7 +157,7 @@ class GithubAuthService:
             if validation['valid']:
                 return {
                     'success': True,
-                    'message': f'Connected as {validation['username']}',
+                    'message': f"Connected as {validation['username']}",
                     'username': validation['username']
                 }
             else:
