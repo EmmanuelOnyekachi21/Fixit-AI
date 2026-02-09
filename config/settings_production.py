@@ -95,9 +95,11 @@ X_FRAME_OPTIONS = 'DENY'
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# WhiteNoise for static file serving
+# Use WhiteNoise for static file serving (simpler for Fly.io)
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Simplified static files storage (no manifest for now)
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # Logging configuration
 LOGGING = {

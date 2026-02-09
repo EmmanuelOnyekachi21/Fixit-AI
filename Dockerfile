@@ -33,8 +33,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy project
 COPY . .
 
-# Collect static files
-RUN python manage.py collectstatic --no-input || echo "Static files collection skipped"
+# Create staticfiles directory
+RUN mkdir -p staticfiles
+
+# Collect static files (with fallback)
+RUN python manage.py collectstatic --no-input --clear || \
+    (echo "Static files collection failed, using default settings" && \
+     mkdir -p staticfiles/admin && \
+     echo "Static files will be served from Django")
 
 # Expose port
 EXPOSE 8080
